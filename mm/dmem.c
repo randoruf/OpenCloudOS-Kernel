@@ -819,6 +819,56 @@ dmem_alloc_pages_nodemask(int nid, nodemask_t *nodemask, unsigned int try_max,
 }
 EXPORT_SYMBOL(dmem_alloc_pages_nodemask);
 
+/* Return a nodelist indicated for current node representing a mempolicy */
+static int *policy_nodelist(struct mempolicy *policy)
+{
+	int nd = numa_node_id();
+
+	switch (policy->mode) {
+	case MPOL_PREFERRED:
+		if (!(policy->flags & MPOL_F_LOCAL))
+			nd = policy->v.preferred_node;
+		break;
+	case MPOL_BIND:
+		if (unlikely(!node_isset(nd, policy->v.nodes)))
+			nd = first_node(policy->v.nodes);
+		break;
+	default:
+		WARN_ON(1);
+	}
+	return dmem_nodelist(nd);
+}
+
+static nodemask_t *dmem_policy_nodemask(struct mempolicy *policy)
+{
+	if (unlikely(policy->mode == MPOL_BIND) &&
+			cpuset_nodemask_valid_mems_allowed(&policy->v.nodes))
+		return &policy->v.nodes;
+
+	return NULL;
+}
+
+static void
+get_mempolicy_nlist_and_nmask(struct mempolicy *pol,
+			      struct vm_area_struct *vma, unsigned long addr,
+			      int **nl, nodemask_t **nmask)
+{
+	if (pol->mode == MPOL_INTERLEAVE) {
+		unsigned int nid;
+
+		/*
+		 * we use dpage_shift to interleave numa nodes although
+		 * multiple dpages may be allocated
+		 */
+		nid = interleave_nid(pol, vma, addr, dmem_pool.dpage_shift);
+		*nl = dmem_nodelist(nid);
+		*nmask = NULL;
+	} else {
+		*nl = policy_nodelist(pol);
+		*nmask = dmem_policy_nodemask(pol);
+	}
+}
+
 /*
  * dmem_alloc_pages_vma - Allocate pages for a VMA.
  *
@@ -826,6 +876,9 @@ EXPORT_SYMBOL(dmem_alloc_pages_nodemask);
  *   @addr: Virtual Address of the allocation. Must be inside the VMA.
  *   @try_max: try to allocate @try_max dpages if possible
  *   @result_nr: allocated dpage number returned to the caller
+ *
+ * This function allocates pages from dmem pool and applies a NUMA policy
+ * associated with the VMA.
  *
  * Return the physical address of the first dpage allocated from dmem
  * pool, or 0 on failure. The allocated dpage number is filled into
@@ -836,13 +889,19 @@ dmem_alloc_pages_vma(struct vm_area_struct *vma, unsigned long addr,
 		     unsigned int try_max, unsigned int *result_nr)
 {
 	phys_addr_t phys_addr;
+	struct mempolicy *pol;
 	int *nl;
+	nodemask_t *nmask;
 	unsigned int cpuset_mems_cookie;
 
 retry_cpuset:
-	nl = dmem_nodelist(numa_node_id());
+	pol = get_vma_policy(vma, addr);
+	cpuset_mems_cookie = read_mems_allowed_begin();
 
-	phys_addr = dmem_alloc_pages_from_nodelist(nl, NULL, try_max,
+	get_mempolicy_nlist_and_nmask(pol, vma, addr, &nl, &nmask);
+	mpol_cond_put(pol);
+
+	phys_addr = dmem_alloc_pages_from_nodelist(nl, nmask, try_max,
 						   result_nr);
 	if (unlikely(!phys_addr && read_mems_allowed_retry(cpuset_mems_cookie)))
 		goto retry_cpuset;

@@ -1,5 +1,8 @@
 config DMEM_FS
 	tristate "Direct Memory filesystem support"
+	depends on DMEM
+	depends on TRANSPARENT_HUGEPAGE
+	depends on ARCH_HAS_PTE_DMEM
 	help
 	  dmemfs (Direct Memory filesystem) is device memory or reserved
 	  memory based filesystem. This kind of memory is special as it

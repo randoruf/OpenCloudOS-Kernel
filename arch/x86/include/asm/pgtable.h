@@ -415,6 +415,13 @@ static inline pmd_t pmd_mkdevmap(pmd_t pmd)
 	return pmd_set_flags(pmd, _PAGE_DEVMAP);
 }
 
+#ifdef CONFIG_ARCH_HAS_PTE_DMEM
+static inline pmd_t pmd_mkdmem(pmd_t pmd)
+{
+	return pmd_set_flags(pmd, _PAGE_SPECIAL | _PAGE_DMEM);
+}
+#endif
+
 static inline pmd_t pmd_mkhuge(pmd_t pmd)
 {
 	return pmd_set_flags(pmd, _PAGE_PSE);

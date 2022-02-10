@@ -650,6 +650,9 @@ config IDLE_PAGE_TRACKING
 config ARCH_HAS_PTE_DEVMAP
 	bool
 
+config ARCH_HAS_PTE_DMEM
+	bool
+
 config ZONE_DEVICE
 	bool "Device memory (pmem, HMM, etc...) hotplug support"
 	depends on MEMORY_HOTPLUG
