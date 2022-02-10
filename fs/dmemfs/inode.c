@@ -440,7 +440,7 @@ dmemfs_access_dmem(struct vm_area_struct *vma, unsigned long addr,
 	return len;
 }
 
-static vm_fault_t dmemfs_fault(struct vm_fault *vmf)
+static vm_fault_t __dmemfs_fault(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
 	struct inode *inode = file_inode(vma->vm_file);
@@ -468,6 +468,63 @@ exit:
 	return ret;
 }
 
+static vm_fault_t  __dmemfs_pmd_fault(struct vm_fault *vmf)
+{
+	struct vm_area_struct *vma = vmf->vma;
+	unsigned long pmd_addr = vmf->address & PMD_MASK;
+	unsigned long page_addr;
+	struct inode *inode = file_inode(vma->vm_file);
+	void *entry;
+	phys_addr_t phys;
+	pfn_t pfn;
+	int ret;
+
+	if (dmem_page_size(inode) < PMD_SIZE)
+		return VM_FAULT_FALLBACK;
+
+	WARN_ON(pmd_addr < vma->vm_start ||
+		vma->vm_end < pmd_addr + PMD_SIZE);
+
+	page_addr = vmf->address & ~(dmem_page_size(inode) - 1);
+	entry = radix_get_create_entry(vma, page_addr, inode,
+				       linear_page_index(vma, page_addr));
+	if (IS_ERR(entry))
+		return (PTR_ERR(entry) == -ENOMEM) ?
+			VM_FAULT_OOM : VM_FAULT_SIGBUS;
+
+	phys = dmem_addr_to_pfn(inode, dmem_entry_to_addr(inode, entry),
+				linear_page_index(vma, pmd_addr), PMD_SHIFT);
+	phys <<= PAGE_SHIFT;
+	pfn = phys_to_pfn_t(phys, PFN_DMEM);
+	ret = vmf_insert_pfn_pmd(vmf, pfn, !!(vma->vm_flags & VM_WRITE));
+
+	radix_put_entry();
+	return ret;
+}
+
+static vm_fault_t dmemfs_huge_fault(struct vm_fault *vmf, enum page_entry_size pe_size)
+{
+	int ret;
+
+	switch (pe_size) {
+	case PE_SIZE_PTE:
+		ret = __dmemfs_fault(vmf);
+		break;
+	case PE_SIZE_PMD:
+		ret = __dmemfs_pmd_fault(vmf);
+		break;
+	default:
+		ret = VM_FAULT_SIGBUS;
+	}
+
+	return ret;
+}
+
+static vm_fault_t dmemfs_fault(struct vm_fault *vmf)
+{
+	return dmemfs_huge_fault(vmf, PE_SIZE_PTE);
+}
+
 static unsigned long dmemfs_pagesize(struct vm_area_struct *vma)
 {
 	return dmem_page_size(file_inode(vma->vm_file));
@@ -478,6 +535,7 @@ static const struct vm_operations_struct dmemfs_vm_ops = {
 	.fault = dmemfs_fault,
 	.pagesize = dmemfs_pagesize,
 	.access = dmemfs_access_dmem,
+	.huge_fault = dmemfs_huge_fault,
 };
 
 int dmemfs_file_mmap(struct file *file, struct vm_area_struct *vma)
@@ -490,11 +548,61 @@ int dmemfs_file_mmap(struct file *file, struct vm_area_struct *vma)
 	if (!(vma->vm_flags & VM_SHARED))
 		return -EINVAL;
 
-	vma->vm_flags |= VM_PFNMAP | VM_DMEM | VM_IO;
+	vma->vm_flags |= VM_PFNMAP | VM_DONTCOPY | VM_DMEM | VM_IO;
+
+	if (dmem_page_size(inode) != PAGE_SIZE)
+		vma->vm_flags |= VM_HUGEPAGE;
 
 	file_accessed(file);
 	vma->vm_ops = &dmemfs_vm_ops;
 	return 0;
+}
+
+/*
+ * If the size of area returned by mm->get_unmapped_area() is one
+ * dmem pagesize larger than 'len', the returned addr by
+ * mm->get_unmapped_area() could be aligned to dmem pagesize to
+ * meet alignment demand.
+ */
+static unsigned long
+dmemfs_get_unmapped_area(struct file *file, unsigned long addr,
+			 unsigned long len, unsigned long pgoff,
+			 unsigned long flags)
+{
+	unsigned long len_pad;
+	unsigned long off = pgoff << PAGE_SHIFT;
+	unsigned long align;
+
+	align = dmem_page_size(file_inode(file));
+
+	/* For pud or pmd pagesize, could not support fault fallback. */
+	if (len & (align - 1))
+		return -EINVAL;
+	if (len > TASK_SIZE)
+		return -ENOMEM;
+
+	if (flags & MAP_FIXED) {
+		if (addr & (align - 1))
+			return -EINVAL;
+		return addr;
+	}
+
+	/*
+	 * Pad a extra align space for 'len', as we want to find a unmapped
+	 * area which is larger enough to align with dmemfs pagesize, if
+	 * pagesize of dmem is larger than 4K.
+	 */
+	len_pad = (align == PAGE_SIZE) ? len : len + align;
+
+	/* 'len' or 'off' is too large for pad. */
+	if (len_pad < len || (off + len_pad) < off)
+		return -EINVAL;
+
+	addr = current->mm->get_unmapped_area(file, addr, len_pad,
+					      pgoff, flags);
+
+	/* Now 'addr' could be aligned to upper boundary. */
+	return IS_ERR_VALUE(addr) ? addr : round_up(addr, align);
 }
 
 static const struct inode_operations dmemfs_dir_inode_operations = {
@@ -513,6 +621,7 @@ static const struct inode_operations dmemfs_file_inode_operations = {
 
 static const struct file_operations dmemfs_file_operations = {
 	.mmap = dmemfs_file_mmap,
+	.get_unmapped_area = dmemfs_get_unmapped_area,
 };
 
 static int dmemfs_parse_param(struct fs_context *fc, struct fs_parameter *param)
