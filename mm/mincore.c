@@ -102,8 +102,12 @@ static int __mincore_unmapped_range(unsigned long addr, unsigned long end,
 		pgoff_t pgoff;
 
 		pgoff = linear_page_index(vma, addr);
-		for (i = 0; i < nr; i++, pgoff++)
-			vec[i] = mincore_page(vma->vm_file->f_mapping, pgoff);
+		for (i = 0; i < nr; i++, pgoff++) {
+			if (vma_is_dmem(vma))
+				vec[i] = 1;
+			else
+				vec[i] = mincore_page(vma->vm_file->f_mapping, pgoff);
+		}
 	} else {
 		for (i = 0; i < nr; i++)
 			vec[i] = 0;

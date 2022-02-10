@@ -268,8 +268,11 @@ retry:
 			goto no_page;
 	} else if (unlikely(!page)) {
 		if (flags & FOLL_DUMP) {
-			/* Avoid special (like zero) pages in core dumps */
-			page = ERR_PTR(-EFAULT);
+			if (vma_is_dmem(vma))
+				page = ERR_PTR(-EEXIST);
+			else
+				/* Avoid special (like zero) pages in core dumps */
+				page = ERR_PTR(-EFAULT);
 			goto out;
 		}
 

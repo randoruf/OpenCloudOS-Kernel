@@ -490,7 +490,7 @@ int dmemfs_file_mmap(struct file *file, struct vm_area_struct *vma)
 	if (!(vma->vm_flags & VM_SHARED))
 		return -EINVAL;
 
-	vma->vm_flags |= VM_PFNMAP;
+	vma->vm_flags |= VM_PFNMAP | VM_DMEM | VM_IO;
 
 	file_accessed(file);
 	vma->vm_ops = &dmemfs_vm_ops;

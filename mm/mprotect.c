@@ -213,7 +213,7 @@ static inline unsigned long change_pmd_range(struct vm_area_struct *vma,
 		 * for all the checks.
 		 */
 		if (!is_swap_pmd(*pmd) && !pmd_devmap(*pmd) &&
-		     pmd_none_or_clear_bad_unless_trans_huge(pmd))
+		     pmd_none_or_clear_bad_unless_trans_huge(pmd) && !pmd_special(*pmd))
 			goto next;
 
 		/* invoke the mmu notifier if the pmd is populated */
@@ -385,6 +385,9 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 		*pprev = vma;
 		return 0;
 	}
+
+	if (vma_is_dmem(vma))
+		return -EINVAL;
 
 	/*
 	 * Do PROT_NONE PFN permission checks here when we can still
