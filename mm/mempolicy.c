@@ -1736,8 +1736,8 @@ struct mempolicy *__get_vma_policy(struct vm_area_struct *vma,
  * freeing by another task.  It is the caller's responsibility to free the
  * extra reference for shared policies.
  */
-static struct mempolicy *get_vma_policy(struct vm_area_struct *vma,
-						unsigned long addr)
+struct mempolicy *get_vma_policy(struct vm_area_struct *vma,
+				 unsigned long addr)
 {
 	struct mempolicy *pol = __get_vma_policy(vma, addr);
 
@@ -1902,8 +1902,8 @@ static unsigned offset_il_node(struct mempolicy *pol, unsigned long n)
 }
 
 /* Determine a node number for interleave */
-static inline unsigned interleave_nid(struct mempolicy *pol,
-		 struct vm_area_struct *vma, unsigned long addr, int shift)
+unsigned interleave_nid(struct mempolicy *pol,
+			struct vm_area_struct *vma, unsigned long addr, int shift)
 {
 	if (vma) {
 		unsigned long off;
