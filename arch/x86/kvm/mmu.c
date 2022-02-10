@@ -38,6 +38,7 @@
 #include <linux/hash.h>
 #include <linux/kern_levels.h>
 #include <linux/kthread.h>
+#include <linux/dmem.h>
 
 #include <asm/page.h>
 #include <asm/pat.h>

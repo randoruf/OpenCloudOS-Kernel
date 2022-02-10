@@ -968,3 +968,11 @@ void dmem_free_pages(phys_addr_t addr, unsigned int dpages_nr)
 	mutex_unlock(&dmem_pool.lock);
 }
 EXPORT_SYMBOL(dmem_free_pages);
+
+bool is_dmem_pfn(unsigned long pfn)
+{
+	struct dmem_node *dnode;
+
+	return !!find_dmem_region(__pfn_to_phys(pfn), &dnode);
+}
+EXPORT_SYMBOL(is_dmem_pfn);
