@@ -220,6 +220,15 @@ config BALLOON_COMPACTION
 	  scenario aforementioned and helps improving memory defragmentation.
 
 #
+# support for direct memory basics
+config DMEM
+	bool "Direct Memory Reservation"
+	depends on SPARSEMEM
+	help
+	  Allow reservation of memory which could be for the dedicated use of dmem.
+	  It's the basis of dmemfs.
+
+#
 # support for memory compaction
 config COMPACTION
 	bool "Allow for memory compaction"

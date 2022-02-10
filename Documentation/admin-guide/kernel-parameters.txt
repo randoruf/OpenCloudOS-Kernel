@@ -934,6 +934,44 @@
 			The filter can be disabled or changed to another
 			driver later using sysfs.
 
+	dmem=[!]size[KMG]
+			[KNL, NUMA] When CONFIG_DMEM is set, this means
+			the size of memory reserved for dmemfs on each NUMA
+			memory node and 'size' must be aligned to the default
+			alignment that is the size of memory section which is
+			128M by default on x86_64. If set '!', such amount of
+			memory on each node will be owned by kernel and dmemfs
+			owns the rest of memory on each node.
+			Example: Reserve 4G memory on each node for dmemfs
+				dmem = 4G
+
+	dmem=[!]size[KMG]:align[KMG]
+			[KNL, NUMA] Ditto. 'align' should be power of two and
+			not smaller than the default alignment. Also 'size'
+			must be aligned to 'align'.
+			Example: Bad dmem parameter because 'size' misaligned
+				dmem=0x40200000:1G
+
+	dmem=size[KMG]@addr[KMG]
+			[KNL] When CONFIG_DMEM is set, this marks specific
+			memory as reserved for dmemfs. Region of memory will be
+			used by dmemfs, from addr to addr + size. Reserving a
+			certain memory region for kernel is illegal so '!' is
+			forbidden. Should not assign 'addr' to 0 because kernel
+			will occupy fixed memory region beginning at 0 address.
+			Ditto, 'size' and 'addr' must be aligned to default
+			alignment.
+			Example: Exclude memory from 5G-6G for dmemfs.
+				dmem=1G@5G
+
+	dmem=size[KMG]@addr[KMG]:align[KMG]
+			[KNL] Ditto. 'align' should be power of two and
+			not smaller than the default alignment. Also 'size'
+			and 'addr' must be aligned to 'align'. Specially,
+			'@addr' and ':align' could occur in any order.
+			Example: Exclude memory from 5G-6G for dmemfs.
+				dmem=1G:1G@5G
+
 	driver_async_probe=  [KNL]
 			List of driver names to be probed asynchronously.
 			Format: <driver_name1>,<driver_name2>...
