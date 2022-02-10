@@ -86,6 +86,71 @@ static int dmemfs_mkdir(struct inode *dir, struct dentry *dentry,
 	return __create_file(dir, dentry, mode | S_IFDIR);
 }
 
+static void inode_drop_dpages(struct inode *inode, loff_t start, loff_t end);
+
+static int dmemfs_truncate(struct inode *inode, loff_t newsize)
+{
+	struct super_block *sb = inode->i_sb;
+	loff_t current_size;
+
+	if (newsize & ((1 << sb->s_blocksize_bits) - 1))
+		return -EINVAL;
+
+	current_size = i_size_read(inode);
+	i_size_write(inode, newsize);
+
+	if (newsize >= current_size)
+		return 0;
+
+	/* it cuts the inode down */
+
+	/*
+	 * we should make sure inode->i_size has been updated before
+	 * unmapping and dropping radix entries, so that other sides
+	 * can not create new i_mapping entry beyond inode->i_size
+	 * and the radix entry in the truncated region is not being
+	 * used
+	 *
+	 * see the comments in dmemfs_fault()
+	 */
+	synchronize_rcu();
+
+	/*
+	 * should unmap all mapping first as dmem pages are freed in
+	 * inode_drop_dpages()
+	 *
+	 * after that, dmem page in the truncated region is not used
+	 * by any process
+	 */
+	unmap_mapping_range(inode->i_mapping, newsize, 0, 1);
+
+	inode_drop_dpages(inode, newsize, LLONG_MAX);
+	return 0;
+}
+
+/*
+ * same logic as simple_setattr but we need to handle ftruncate
+ * carefully as we inserted self-defined entry into radix tree
+ */
+static int dmemfs_setattr(struct dentry *dentry, struct iattr *iattr)
+{
+	struct inode *inode = dentry->d_inode;
+	int error;
+
+	error = setattr_prepare(dentry, iattr);
+	if (error)
+		return error;
+
+	if (iattr->ia_valid & ATTR_SIZE) {
+		error = dmemfs_truncate(inode, iattr->ia_size);
+		if (error)
+			return error;
+	}
+	setattr_copy(inode, iattr);
+	mark_inode_dirty(inode);
+	return 0;
+}
+
 static unsigned long dmem_pgoff_to_index(struct inode *inode, pgoff_t pgoff)
 {
 	struct super_block *sb = inode->i_sb;
@@ -343,7 +408,7 @@ static const struct inode_operations dmemfs_dir_inode_operations = {
 };
 
 static const struct inode_operations dmemfs_file_inode_operations = {
-	.setattr = simple_setattr,
+	.setattr = dmemfs_setattr,
 	.getattr = simple_getattr,
 };
 
