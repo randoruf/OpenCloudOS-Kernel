@@ -479,6 +479,13 @@ static int reserve_ram_pages_type(u64 start, u64 end,
 	for (pfn = (start >> PAGE_SHIFT); pfn < (end >> PAGE_SHIFT); ++pfn) {
 		enum page_cache_mode type;
 
+		/*
+		 * it's dmem if it's ram but not 'struct page' backend,
+		 * we always use WB
+		 */
+		if (WARN_ON(!pfn_valid(pfn)))
+			return -EBUSY;
+
 		page = pfn_to_page(pfn);
 		type = get_page_memtype(page);
 		if (type != _PAGE_CACHE_MODE_WB) {
@@ -507,6 +514,13 @@ static int free_ram_pages_type(u64 start, u64 end)
 	u64 pfn;
 
 	for (pfn = (start >> PAGE_SHIFT); pfn < (end >> PAGE_SHIFT); ++pfn) {
+		/*
+		 * it's dmem, see the comments in
+		 * reserve_ram_pages_type()
+		 */
+		if (WARN_ON(!pfn_valid(pfn)))
+			continue;
+
 		page = pfn_to_page(pfn);
 		set_page_memtype(page, _PAGE_CACHE_MODE_WB);
 	}
@@ -686,6 +700,13 @@ static enum page_cache_mode lookup_memtype(u64 paddr)
 
 	if (pat_pagerange_is_ram(paddr, paddr + PAGE_SIZE)) {
 		struct page *page;
+
+		/*
+		 * dmem always uses WB, see the comments in
+		 * reserve_ram_pages_type()
+		 */
+		if (!pfn_valid(paddr >> PAGE_SHIFT))
+			return rettype;
 
 		page = pfn_to_page(paddr >> PAGE_SHIFT);
 		return get_page_memtype(page);
