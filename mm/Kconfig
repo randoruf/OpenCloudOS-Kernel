@@ -228,6 +228,13 @@ config DMEM
 	  Allow reservation of memory which could be for the dedicated use of dmem.
 	  It's the basis of dmemfs.
 
+config DMEM_DEBUG_FS
+	bool "Enable debug information for direct memory"
+	depends on DMEM && DEBUG_FS
+	help
+	  This option enables showing various statistics of direct memory
+	  in debugfs filesystem.
+
 #
 # support for memory compaction
 config COMPACTION

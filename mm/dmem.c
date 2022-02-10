@@ -161,6 +161,103 @@ int dmem_region_register(int node, phys_addr_t start, phys_addr_t end)
 	return 0;
 }
 
+#ifdef CONFIG_DMEM_DEBUG_FS
+struct debugfs_entry {
+	const char *name;
+	unsigned long offset;
+};
+
+#define DMEM_POOL_OFFSET(x)	offsetof(struct dmem_pool, x)
+#define DMEM_POOL_ENTRY(x)	{__stringify(x), DMEM_POOL_OFFSET(x)}
+
+#define DMEM_NODE_OFFSET(x)	offsetof(struct dmem_node, x)
+#define DMEM_NODE_ENTRY(x)	{__stringify(x), DMEM_NODE_OFFSET(x)}
+
+static struct debugfs_entry dmem_pool_entries[] = {
+	DMEM_POOL_ENTRY(region_num),
+	DMEM_POOL_ENTRY(registered_pages),
+	DMEM_POOL_ENTRY(unaligned_pages),
+	DMEM_POOL_ENTRY(dpage_shift),
+	DMEM_POOL_ENTRY(total_dpages),
+	DMEM_POOL_ENTRY(free_dpages),
+};
+
+static struct debugfs_entry dmem_node_entries[] = {
+	DMEM_NODE_ENTRY(total_dpages),
+	DMEM_NODE_ENTRY(free_dpages),
+};
+
+static int dmem_entry_get(void *offset, u64 *val)
+{
+	*val = *(u64 *)offset;
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(dmem_fops, dmem_entry_get, NULL, "%llu\n");
+
+static int dmemfs_init_debugfs_node(struct dmem_node *dnode,
+				    struct dentry *parent)
+{
+	struct dentry *node_dir;
+	char dir_name[32];
+	int i, ret = -EEXIST;
+
+	snprintf(dir_name, sizeof(dir_name), "node%ld",
+		 dnode - dmem_pool.nodes);
+	node_dir = debugfs_create_dir(dir_name, parent);
+	if (!node_dir)
+		return ret;
+
+	for (i = 0; i < ARRAY_SIZE(dmem_node_entries); i++)
+		if (!debugfs_create_file(dmem_node_entries[i].name, 0444,
+		   node_dir, (void *)dnode + dmem_node_entries[i].offset,
+		   &dmem_fops))
+			return ret;
+	return 0;
+}
+
+static int dmemfs_init_debugfs(void)
+{
+	struct dentry *dmem_debugfs_dir;
+	struct dmem_node *dnode;
+	int i, ret = -EEXIST;
+
+	dmem_debugfs_dir = debugfs_create_dir("dmem", NULL);
+	if (!dmem_debugfs_dir)
+		return ret;
+
+	for (i = 0; i < ARRAY_SIZE(dmem_pool_entries); i++)
+		if (!debugfs_create_file(dmem_pool_entries[i].name, 0444,
+		   dmem_debugfs_dir,
+		   (void *)&dmem_pool + dmem_pool_entries[i].offset,
+		   &dmem_fops))
+			goto exit;
+
+	for_each_dmem_node(dnode) {
+		/*
+		 * do not create debugfs files for the node
+		 * where no memory is available
+		 */
+		if (list_empty(&dnode->regions))
+			continue;
+
+		if (dmemfs_init_debugfs_node(dnode, dmem_debugfs_dir))
+			goto exit;
+	}
+
+	return 0;
+exit:
+	debugfs_remove_recursive(dmem_debugfs_dir);
+	return ret;
+}
+
+#else
+static int dmemfs_init_debugfs(void)
+{
+	return 0;
+}
+#endif
+
 #define PENALTY_FOR_DMEM_SHARED_NODE		(1)
 
 static int dmem_nodeload[MAX_NUMNODES] __initdata;
@@ -361,7 +458,8 @@ static int __init dmem_late_init(void)
 				goto exit;
 		}
 	}
-	return ret;
+
+	return dmemfs_init_debugfs();
 exit:
 	dmem_uinit();
 	return ret;
