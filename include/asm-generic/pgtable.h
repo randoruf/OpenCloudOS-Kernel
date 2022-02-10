@@ -922,6 +922,16 @@ static inline int pmd_special(pmd_t pmd)
 {
 	return 0;
 }
+
+static inline pud_t pud_mkdmem(pud_t pud)
+{
+	return pud;
+}
+
+static inline int pud_special(pud_t pud)
+{
+	return 0;
+}
 #endif
 
 #ifndef pmd_read_atomic

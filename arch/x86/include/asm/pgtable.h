@@ -278,6 +278,19 @@ static inline int pmd_special(pmd_t pmd)
 	return (pmd_val(pmd) & (_PAGE_SPECIAL | _PAGE_DMEM)) ==
 		(_PAGE_SPECIAL | _PAGE_DMEM);
 }
+
+static inline int pud_special(pud_t pud)
+{
+	return (pud_val(pud) & (_PAGE_SPECIAL | _PAGE_DMEM)) ==
+		(_PAGE_SPECIAL | _PAGE_DMEM);
+}
+#endif
+
+#ifdef CONFIG_ARCH_HAS_PTE_DMEM
+static inline pud_t pud_mkdmem(pud_t pud)
+{
+	return pud_set_flags(pud, _PAGE_SPECIAL | _PAGE_DMEM);
+}
 #endif
 
 #ifdef CONFIG_ARCH_HAS_PTE_DEVMAP
