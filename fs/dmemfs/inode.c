@@ -347,6 +347,51 @@ static void radix_put_entry(void)
 	rcu_read_unlock();
 }
 
+static bool check_vma_access(struct vm_area_struct *vma, int write)
+{
+	vm_flags_t vm_flags = write ? VM_WRITE : VM_READ;
+
+	return !!(vm_flags & vma->vm_flags);
+}
+
+static int
+dmemfs_access_dmem(struct vm_area_struct *vma, unsigned long addr,
+		   void *buf, int len, int write)
+{
+	struct inode *inode = file_inode(vma->vm_file);
+	struct super_block *sb = inode->i_sb;
+	void *entry, *maddr;
+	int offset, pgoff;
+
+	if (!check_vma_access(vma, write))
+		return -EACCES;
+
+	pgoff = linear_page_index(vma, addr);
+	if (pgoff > (MAX_LFS_FILESIZE >> PAGE_SHIFT))
+		return -EFAULT;
+
+	entry = radix_get_create_entry(vma, addr, inode, pgoff);
+	if (IS_ERR(entry))
+		return PTR_ERR(entry);
+
+	offset = addr & (sb->s_blocksize - 1);
+	addr = dmem_entry_to_addr(inode, entry);
+
+	/*
+	 * it is not beyond vma's region as the vma should be aligned
+	 * to blocksize
+	 */
+	len = min(len, (int)(sb->s_blocksize - offset));
+	maddr = __va(addr);
+	if (write)
+		memcpy(maddr + offset, buf, len);
+	else
+		memcpy(buf, maddr + offset, len);
+	radix_put_entry();
+
+	return len;
+}
+
 static vm_fault_t dmemfs_fault(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
@@ -383,6 +428,7 @@ static unsigned long dmemfs_pagesize(struct vm_area_struct *vma)
 static const struct vm_operations_struct dmemfs_vm_ops = {
 	.fault = dmemfs_fault,
 	.pagesize = dmemfs_pagesize,
+	.access = dmemfs_access_dmem,
 };
 
 int dmemfs_file_mmap(struct file *file, struct vm_area_struct *vma)
