@@ -31,6 +31,8 @@ MODULE_LICENSE("GPL v2");
 #define CREATE_TRACE_POINTS
 #include "trace.h"
 
+static uint __read_mostly max_alloc_try_dpages = 1;
+
 struct dmemfs_mount_opts {
 	unsigned long dpage_size;
 };
@@ -42,6 +44,44 @@ struct dmemfs_fs_info {
 enum dmemfs_param {
 	Opt_dpagesize,
 };
+
+static int
+max_alloc_try_dpages_set(const char *val, const struct kernel_param *kp)
+{
+	uint sval;
+	int ret;
+
+	ret = kstrtouint(val, 0, &sval);
+	if (ret)
+		return ret;
+
+	/* should be 1 at least */
+	if (!sval)
+		return -EINVAL;
+
+	max_alloc_try_dpages = sval;
+	return 0;
+}
+
+static struct kernel_param_ops alloc_max_try_dpages_ops = {
+	.set = max_alloc_try_dpages_set,
+	.get = param_get_uint,
+};
+
+/*
+ * it specifies the dmem page number allocated at one time, then
+ * multiple radix entries can be created. That will relief the
+ * allocation pressure and make page fault more fast.
+ *
+ * however that could cause no dmem page mmapped to userspace
+ * even if there are some free dmem pages
+ *
+ * set it to 1 to completely disable this behavior
+ */
+fs_param_cb(max_alloc_try_dpages, &alloc_max_try_dpages_ops,
+	    &max_alloc_try_dpages, 0644);
+__MODULE_PARM_TYPE(max_alloc_try_dpages, "uint");
+MODULE_PARM_DESC(max_alloc_try_dpages, "Set the dmem page number allocated at one time, should be 1 at least");
 
 const struct fs_parameter_spec dmemfs_fs_parameters[] = {
 	fsparam_string("pagesize", Opt_dpagesize),
@@ -297,6 +337,7 @@ retry:
 	}
 	rcu_read_unlock();
 
+	try_dpages = min(try_dpages, max_alloc_try_dpages);
 	/* entry does not exist, create it */
 	addr = dmem_alloc_pages_vma(vma, fault_addr, try_dpages, &dpages);
 	if (!addr) {
