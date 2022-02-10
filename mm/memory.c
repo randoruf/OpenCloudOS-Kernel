@@ -201,6 +201,14 @@ static void check_sync_rss_stat(struct task_struct *task)
 
 #endif /* SPLIT_RSS_COUNTING */
 
+static int follow_pte_pmd(struct mm_struct *mm, unsigned long address,
+							unsigned long *start, unsigned long *end,
+							pte_t **ptepp, pmd_t **pmdpp, spinlock_t **ptlp)
+{
+	printk("Warning, ooops\n");
+	panic("Need to implement");
+}
+
 /*
  * Note: this doesn't free the actual pages themselves. That
  * has been handled earlier when unmapping all the memory regions.
@@ -4351,7 +4359,7 @@ int follow_pfn(struct vm_area_struct *vma, unsigned long address,
 	if (!(vma->vm_flags & (VM_IO | VM_PFNMAP)))
 		return ret;
 
-	ret = follow_pte_pmd(vma->vm_mm, address, NULL, &ptep, &pmdp, &ptl);
+	ret = follow_pte_pmd(vma->vm_mm, address, NULL, NULL, &ptep, &pmdp, &ptl);
 	if (ret)
 		return ret;
 

@@ -83,9 +83,14 @@ fs_param_cb(max_alloc_try_dpages, &alloc_max_try_dpages_ops,
 __MODULE_PARM_TYPE(max_alloc_try_dpages, "uint");
 MODULE_PARM_DESC(max_alloc_try_dpages, "Set the dmem page number allocated at one time, should be 1 at least");
 
-const struct fs_parameter_spec dmemfs_fs_parameters[] = {
+const struct fs_parameter_spec dmemfs_param_specs[] = {
 	fsparam_string("pagesize", Opt_dpagesize),
 	{}
+};
+
+const struct fs_parameter_description dmemfs_fs_parameters = { 
+    .name       = "dmemfs",
+    .specs      = dmemfs_param_specs,
 };
 
 static int check_dpage_size(unsigned long dpage_size)
@@ -630,7 +635,7 @@ static int dmemfs_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	struct fs_parse_result result;
 	int opt, ret;
 
-	opt = fs_parse(fc, dmemfs_fs_parameters, param, &result);
+	opt = fs_parse(fc, &dmemfs_fs_parameters, param, &result);
 	if (opt < 0)
 		return opt;
 

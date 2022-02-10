@@ -287,6 +287,7 @@ static inline int pud_special(pud_t pud)
 #endif
 
 #ifdef CONFIG_ARCH_HAS_PTE_DMEM
+static inline pud_t pud_set_flags(pud_t pud, pudval_t set);
 static inline pud_t pud_mkdmem(pud_t pud)
 {
 	return pud_set_flags(pud, _PAGE_SPECIAL | _PAGE_DMEM);
