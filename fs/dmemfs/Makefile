@@ -2,6 +2,7 @@
 #
 # Makefile for the linux dmem-filesystem routines.
 #
+ccflags-y += -I $(srctree)/$(src)		# needed for trace events
 obj-$(CONFIG_DMEM_FS) += dmemfs.o
 
 dmemfs-y += inode.o

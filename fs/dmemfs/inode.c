@@ -28,6 +28,9 @@
 MODULE_AUTHOR("Tencent Corporation");
 MODULE_LICENSE("GPL v2");
 
+#define CREATE_TRACE_POINTS
+#include "trace.h"
+
 struct dmemfs_mount_opts {
 	unsigned long dpage_size;
 };
@@ -319,6 +322,7 @@ retry:
 			offset += inode->i_sb->s_blocksize;
 			dpages--;
 			mapping->nrexceptional++;
+			trace_dmemfs_radix_tree_insert(index, entry);
 			index++;
 		}
 
@@ -529,6 +533,7 @@ static void inode_drop_dpages(struct inode *inode, loff_t start, loff_t end)
 				break;
 
 			xa_erase(&mapping->i_pages, istart);
+			trace_dmemfs_radix_tree_delete(istart, pvec.pages[i]);
 			mapping->nrexceptional--;
 
 			addr = dmem_entry_to_addr(inode, pvec.pages[i]);

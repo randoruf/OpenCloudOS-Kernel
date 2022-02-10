@@ -15,6 +15,8 @@
 #include <linux/debugfs.h>
 #include <linux/notifier.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/dmem.h>
 /*
  * There are two kinds of page in dmem management:
  * - nature page, it's the CPU's page size, i.e, 4K on x86
@@ -556,6 +558,8 @@ int dmem_alloc_init(unsigned long dpage_shift)
 
 	mutex_lock(&dmem_pool.lock);
 
+	trace_dmem_alloc_init(dpage_shift);
+
 	if (dmem_pool.dpage_shift) {
 		/*
 		 * double init on the same page size is okay
@@ -683,6 +687,7 @@ dmem_alloc_pages_from_nodelist(int *nodelist, nodemask_t *nodemask,
 			}
 		}
 
+		trace_dmem_alloc_pages_node(addr, node, try_max, *result_nr);
 		mutex_unlock(&dmem_pool.lock);
 	}
 	return addr;
@@ -788,6 +793,7 @@ void dmem_free_pages(phys_addr_t addr, unsigned int dpages_nr)
 
 	mutex_lock(&dmem_pool.lock);
 
+	trace_dmem_free_pages(addr, dpages_nr);
 	WARN_ON(!dmem_pool.dpage_shift);
 
 	dregion = find_dmem_region(addr, &pdnode);
