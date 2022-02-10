@@ -1,0 +1,13 @@
+config DMEM_FS
+	tristate "Direct Memory filesystem support"
+	help
+	  dmemfs (Direct Memory filesystem) is device memory or reserved
+	  memory based filesystem. This kind of memory is special as it
+	  is not managed by kernel and it is without 'struct page'.
+
+	  The original purpose of dmemfs is saving extra memory of
+	  'struct page' that reduces the total cost of ownership (TCO)
+	  for cloud providers.
+
+	  To compile this file system support as a module, choose M here: the
+	  module will be called dmemfs.
