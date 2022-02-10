@@ -917,6 +917,11 @@ static inline pmd_t pmd_mkdmem(pmd_t pmd)
 {
 	return pmd;
 }
+
+static inline int pmd_special(pmd_t pmd)
+{
+	return 0;
+}
 #endif
 
 #ifndef pmd_read_atomic

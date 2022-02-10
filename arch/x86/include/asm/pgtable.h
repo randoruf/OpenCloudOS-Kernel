@@ -256,7 +256,7 @@ static inline int pmd_large(pmd_t pte)
 /* NOTE: when predicate huge page, consider also pmd_devmap, or use pmd_large */
 static inline int pmd_trans_huge(pmd_t pmd)
 {
-	return (pmd_val(pmd) & (_PAGE_PSE|_PAGE_DEVMAP)) == _PAGE_PSE;
+	return (pmd_val(pmd) & (_PAGE_PSE|_PAGE_DEVMAP|_PAGE_DMEM)) == _PAGE_PSE;
 }
 
 #ifdef CONFIG_HAVE_ARCH_TRANSPARENT_HUGEPAGE_PUD
@@ -271,6 +271,14 @@ static inline int has_transparent_hugepage(void)
 {
 	return boot_cpu_has(X86_FEATURE_PSE);
 }
+
+#ifdef CONFIG_ARCH_HAS_PTE_DMEM
+static inline int pmd_special(pmd_t pmd)
+{
+	return (pmd_val(pmd) & (_PAGE_SPECIAL | _PAGE_DMEM)) ==
+		(_PAGE_SPECIAL | _PAGE_DMEM);
+}
+#endif
 
 #ifdef CONFIG_ARCH_HAS_PTE_DEVMAP
 static inline int pmd_devmap(pmd_t pmd)
