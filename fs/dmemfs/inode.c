@@ -395,6 +395,13 @@ static bool check_vma_access(struct vm_area_struct *vma, int write)
 	return !!(vm_flags & vma->vm_flags);
 }
 
+static int dmemfs_split(struct vm_area_struct *vma, unsigned long addr)
+{
+	if (addr & (dmem_page_size(file_inode(vma->vm_file)) - 1))
+		return -EINVAL;
+	return 0;
+}
+
 static int
 dmemfs_access_dmem(struct vm_area_struct *vma, unsigned long addr,
 		   void *buf, int len, int write)
@@ -467,6 +474,7 @@ static unsigned long dmemfs_pagesize(struct vm_area_struct *vma)
 }
 
 static const struct vm_operations_struct dmemfs_vm_ops = {
+	.split = dmemfs_split,
 	.fault = dmemfs_fault,
 	.pagesize = dmemfs_pagesize,
 	.access = dmemfs_access_dmem,
