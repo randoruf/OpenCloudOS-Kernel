@@ -9,6 +9,16 @@ int dmem_region_register(int node, phys_addr_t start, phys_addr_t end);
 int dmem_alloc_init(unsigned long dpage_shift);
 void dmem_alloc_uinit(void);
 
+phys_addr_t
+dmem_alloc_pages_nodemask(int nid, nodemask_t *nodemask, unsigned int try_max,
+			  unsigned int *result_nr);
+
+phys_addr_t
+dmem_alloc_pages_vma(struct vm_area_struct *vma, unsigned long addr,
+		     unsigned int try_max, unsigned int *result_nr);
+
+void dmem_free_pages(phys_addr_t addr, unsigned int dpages_nr);
+#define dmem_free_page(addr)	dmem_free_pages(addr, 1)
 #else
 static inline int dmem_reserve_init(void)
 {
