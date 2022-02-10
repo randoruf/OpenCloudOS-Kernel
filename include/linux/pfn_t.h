@@ -11,6 +11,7 @@
  * PFN_MAP - pfn has a dynamic page mapping established by a device driver
  * PFN_SPECIAL - for CONFIG_FS_DAX_LIMITED builds to allow XIP, but not
  *		 get_user_pages
+ * PFN_DMEM - pfn references a dmem page
  */
 #define PFN_FLAGS_MASK (((u64) (~PAGE_MASK)) << (BITS_PER_LONG_LONG - PAGE_SHIFT))
 #define PFN_SG_CHAIN (1ULL << (BITS_PER_LONG_LONG - 1))
@@ -18,13 +19,15 @@
 #define PFN_DEV (1ULL << (BITS_PER_LONG_LONG - 3))
 #define PFN_MAP (1ULL << (BITS_PER_LONG_LONG - 4))
 #define PFN_SPECIAL (1ULL << (BITS_PER_LONG_LONG - 5))
+#define PFN_DMEM (1ULL << (BITS_PER_LONG_LONG - 6))
 
 #define PFN_FLAGS_TRACE \
 	{ PFN_SPECIAL,	"SPECIAL" }, \
 	{ PFN_SG_CHAIN,	"SG_CHAIN" }, \
 	{ PFN_SG_LAST,	"SG_LAST" }, \
 	{ PFN_DEV,	"DEV" }, \
-	{ PFN_MAP,	"MAP" }
+	{ PFN_MAP,	"MAP" }, \
+	{ PFN_DMEM,	"DMEM" }
 
 static inline pfn_t __pfn_to_pfn_t(unsigned long pfn, u64 flags)
 {
@@ -128,4 +131,16 @@ static inline bool pfn_t_special(pfn_t pfn)
 	return false;
 }
 #endif /* CONFIG_ARCH_HAS_PTE_SPECIAL */
+
+#ifdef CONFIG_ARCH_HAS_PTE_DMEM
+static inline bool pfn_t_dmem(pfn_t pfn)
+{
+	return (pfn.val & PFN_DMEM) == PFN_DMEM;
+}
+#else
+static inline bool pfn_t_dmem(pfn_t pfn)
+{
+	return false;
+}
+#endif /* CONFIG_ARCH_HAS_PTE_DMEM */
 #endif /* _LINUX_PFN_T_H_ */
