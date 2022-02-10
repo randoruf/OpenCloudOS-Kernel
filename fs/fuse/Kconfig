@@ -18,6 +18,13 @@ config FUSE_FS
 	  If you want to develop a userspace FS, or if you want to use
 	  a filesystem based on FUSE, answer Y or M.
 
+config EXTFUSE
+	bool "Extension framework for FUSE"
+	depends on FUSE_FS && BPF_SYSCALL
+	help
+	  This allows applications to load BPF code into the kernel
+	  for caching metadata operations, such as get(x)attr, lookup, etc.
+
 config CUSE
 	tristate "Character device in Userspace support"
 	depends on FUSE_FS

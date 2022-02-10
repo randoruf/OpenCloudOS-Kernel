@@ -7,6 +7,7 @@
 */
 
 #include "fuse_i.h"
+#include "extfuse_i.h"
 
 #include <linux/pagemap.h>
 #include <linux/slab.h>
@@ -922,6 +923,8 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_args *args,
 				if (!(arg->flags & FUSE_POSIX_LOCKS))
 					fc->no_flock = 1;
 			}
+			if (arg->flags & FUSE_FS_EXTFUSE)
+				extfuse_load_prog(fc, arg->extfuse_prog_fd);
 			if (arg->flags & FUSE_ATOMIC_O_TRUNC)
 				fc->atomic_o_trunc = 1;
 			if (arg->minor >= 9) {
@@ -1003,7 +1006,8 @@ void fuse_send_init(struct fuse_conn *fc)
 		FUSE_WRITEBACK_CACHE | FUSE_NO_OPEN_SUPPORT |
 		FUSE_PARALLEL_DIROPS | FUSE_HANDLE_KILLPRIV | FUSE_POSIX_ACL |
 		FUSE_ABORT_ERROR | FUSE_MAX_PAGES | FUSE_CACHE_SYMLINKS |
-		FUSE_NO_OPENDIR_SUPPORT | FUSE_EXPLICIT_INVAL_DATA;
+		FUSE_NO_OPENDIR_SUPPORT | FUSE_EXPLICIT_INVAL_DATA |
+		EXTFUSE_FLAGS;
 	ia->args.opcode = FUSE_INIT;
 	ia->args.in_numargs = 1;
 	ia->args.in_args[0].size = sizeof(ia->in);

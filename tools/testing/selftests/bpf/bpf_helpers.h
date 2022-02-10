@@ -233,7 +233,10 @@ static int (*bpf_send_signal)(unsigned sig) = (void *)BPF_FUNC_send_signal;
 static long long (*bpf_tcp_gen_syncookie)(struct bpf_sock *sk, void *ip,
 					  int ip_len, void *tcp, int tcp_len) =
 	(void *) BPF_FUNC_tcp_gen_syncookie;
-
+static int (*bpf_extfuse_read_args)(void *ctx, int param, void *unsafe_ptr, int size) =
+	(void *) BPF_FUNC_extfuse_read_args;
++static int (*bpf_extfuse_write_args)(void *ctx, int param, const void *unsafe_ptr, int size) =
+	(void *) BPF_FUNC_extfuse_write_args;
 /* llvm builtin functions that eBPF C program may use to
  * emit BPF_LD_ABS and BPF_LD_IND instructions
  */

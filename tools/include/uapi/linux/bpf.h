@@ -3065,7 +3065,8 @@ union bpf_attr {
 	FN(get_ns_current_pid_tgid),	\
 	FN(xdp_output),			\
 	FN(get_netns_cookie),		\
-
+	FN(extfuse_read_args),          \
+	FN(extfuse_write_args), 	\
 /* integer value in 'imm' field of BPF_CALL instruction selects which helper
  * function eBPF program intends to call
  */

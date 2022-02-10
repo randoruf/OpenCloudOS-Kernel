@@ -342,6 +342,7 @@ struct fuse_file_lock {
 #define FUSE_NO_OPENDIR_SUPPORT (1 << 24)
 #define FUSE_EXPLICIT_INVAL_DATA (1 << 25)
 #define FUSE_MAP_ALIGNMENT	(1 << 26)
+#define FUSE_FS_EXTFUSE         (1 << 27)
 
 /**
  * CUSE INIT request/reply flags
@@ -700,7 +701,8 @@ struct fuse_init_out {
 	uint32_t	time_gran;
 	uint16_t	max_pages;
 	uint16_t	map_alignment;
-	uint32_t	unused[8];
+	uint32_t        extfuse_prog_fd;
+	uint32_t	unused[7];
 };
 
 #define CUSE_INIT_INFO_MAX 4096

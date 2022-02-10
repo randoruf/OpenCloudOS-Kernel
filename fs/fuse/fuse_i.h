@@ -763,6 +763,9 @@ struct fuse_conn {
 
 	/** List of device instances belonging to this connection */
 	struct list_head devices;
+
+	/* priv data, used by extfuse */
+	void *fc_priv;
 };
 
 static inline struct fuse_conn *get_fuse_conn_super(struct super_block *sb)
