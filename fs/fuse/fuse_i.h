@@ -518,6 +518,9 @@ struct fuse_conn {
 	/** The group id for this mount */
 	kgid_t group_id;
 
+	/** The /dev/fuse file for this mount */
+	struct file *fusedev_file;
+
 	/** The pid namespace for this mount */
 	struct pid_namespace *pid_ns;
 
@@ -721,6 +724,9 @@ struct fuse_conn {
 
 	/* Do not show mount options */
 	unsigned int no_mount_options:1;
+
+	/** Do not check fusedev_file (virtiofs) */
+	unsigned int check_fusedev_file:1;
 
 	/** The number of requests waiting for completion */
 	atomic_t num_waiting;
