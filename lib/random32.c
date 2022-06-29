@@ -328,14 +328,7 @@ core_initcall(prandom_state_selftest);
  * of output.
  */
 
-struct siprand_state {
-	unsigned long v0;
-	unsigned long v1;
-	unsigned long v2;
-	unsigned long v3;
-};
-
-static DEFINE_PER_CPU(struct siprand_state, net_rand_state) __latent_entropy;
+DEFINE_PER_CPU(struct siprand_state, net_rand_state) __latent_entropy;
 
 /*
  * This is the core CPRNG function.  As "pseudorandom", this is not used
