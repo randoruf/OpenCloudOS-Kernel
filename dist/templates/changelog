@@ -1,2 +1,6 @@
+* Fri Jul 01 2022 Kairui Song <kasong@tencent.com> - 5.4.119-19-0010.ocrelease.6
+- Enable several DRM/FB drivers
+- Rebuild base on latest OC repo
+
 * Fri Jun 24 2022 Kairui Song <kasong@tencent.com> - 5.4.119-19-0010.ocrelease.5
 - Initial release
