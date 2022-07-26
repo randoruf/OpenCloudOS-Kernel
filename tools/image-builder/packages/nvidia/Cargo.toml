@@ -1,0 +1,9 @@
+[package]
+name = "nvidia"
+version = "460.32.3"
+edition = "2018"
+publish = false
+build = "build.rs"
+
+[lib]
+path = "pkg.rs"

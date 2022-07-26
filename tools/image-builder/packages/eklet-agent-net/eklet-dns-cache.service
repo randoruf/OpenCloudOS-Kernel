@@ -1,0 +1,20 @@
+[Unit]
+Description=DNS cache of Tencent EKS
+Documentation=https://cloud.tencent.com
+Wants=eklet-agent-config.service
+After=eklet-agent-config.service
+
+[Service]
+ExecStart=/opt/eklet-agent/dns-cache -i eth0
+Type=simple
+Restart=always
+RestartSec=2
+OOMScoreAdjust=-999
+CPUAccounting=true
+CPUQuota=25%
+MemoryAccounting=true
+MemoryMax=40M
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target

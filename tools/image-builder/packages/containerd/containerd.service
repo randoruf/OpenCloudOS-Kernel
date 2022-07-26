@@ -16,7 +16,9 @@
 Description=CRI Container Runtime
 Documentation=https://containerd.io
 Wants=eklet-agent-init.service
+Wants=eklet-agent.service
 After=eklet-agent-init.service
+Before=eklet-agent.service
 
 [Service]
 ExecStartPre=-/sbin/modprobe overlay
@@ -36,6 +38,8 @@ LimitNOFILE=1048576
 # Only systemd 226 and above support this version.
 TasksMax=infinity
 OOMScoreAdjust=-999
+CPUAccounting=true
+MemoryAccounting=true
 
 [Install]
 WantedBy=multi-user.target

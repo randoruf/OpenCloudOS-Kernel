@@ -13,23 +13,18 @@ Requires: ca-certificates
 Requires: coreutils
 Requires: e2fsprogs
 Requires: libgcc
-Requires: libstd-rust
 Requires: filesystem
 Requires: glibc
 Requires: iproute
-Requires: bash
 Requires: chrony
 Requires: growpart
-Requires: util-linux
 Requires: net-tools
-Requires: bridge-utils
-Requires: shadow-utils
 Requires: systemd
-Requires: systemd-container
-Requires: systemd-devel
 Requires: systemd-libs
 Requires: systemd-udev
 Requires: systemd-networkd
+#Requires: systemd-devel
+#Requires: systemd-container
 
 %description
 %{summary}.

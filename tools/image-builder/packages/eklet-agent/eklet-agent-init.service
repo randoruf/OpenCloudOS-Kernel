@@ -2,9 +2,9 @@
 Description=Initialize EKLet Agent of Tencent EKS
 Documentation=https://cloud.tencent.com
 DefaultDependencies=no
-Wants=eklet-agent-config.service
+Wants=eklet-agent-net.service
 Wants=containerd.service
-After=eklet-agent-config.service
+After=eklet-agent-net.service
 Before=containerd.service
 
 [Service]

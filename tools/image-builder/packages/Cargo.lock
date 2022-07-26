@@ -3,26 +3,53 @@
 version = 3
 
 [[package]]
+name = "aegis"
+version = "0.0.1"
+dependencies = [
+ "kernel-5_4_87",
+]
+
+[[package]]
 name = "ca-certificates"
+version = "0.1.0"
+
+[[package]]
+name = "cni-plugins"
 version = "0.1.0"
 
 [[package]]
 name = "containerd"
 version = "0.1.0"
 dependencies = [
- "glibc",
- "libseccomp",
+ "cni-plugins",
+ "runc",
 ]
+
+[[package]]
+name = "cosfs"
+version = "4.2.1"
+
+[[package]]
+name = "ebpf-tools"
+version = "0.0.1"
 
 [[package]]
 name = "eklet-agent"
 version = "0.1.0"
 dependencies = [
- "glibc",
+ "containerd",
+ "runc",
 ]
 
 [[package]]
-name = "glibc"
+name = "eklet-agent-net"
+version = "0.1.0"
+dependencies = [
+ "ebpf-tools",
+]
+
+[[package]]
+name = "eks-tool"
 version = "0.1.0"
 
 [[package]]
@@ -38,28 +65,21 @@ name = "kernel-5_4_87"
 version = "0.1.0"
 
 [[package]]
-name = "libseccomp"
-version = "0.1.0"
-dependencies = [
- "glibc",
-]
-
-[[package]]
 name = "libstd-rust"
 version = "0.1.0"
+
+[[package]]
+name = "nvidia"
+version = "460.32.3"
 
 [[package]]
 name = "release"
 version = "0.0.0"
 dependencies = [
+ "ca-certificates",
  "growpart",
- "libstd-rust",
 ]
 
 [[package]]
 name = "runc"
 version = "0.1.0"
-dependencies = [
- "glibc",
- "libseccomp",
-]

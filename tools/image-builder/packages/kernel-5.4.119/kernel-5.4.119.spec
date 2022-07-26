@@ -42,15 +42,10 @@ Summary: Header files for the Linux kernel for use by glibc
 if [ %{_cross_arch} == "aarch64" ];then
     git clone -b arm64-5.4.119-19-0009 https://github.com/Tencent/TencentOS-kernel.git ./tencentos-%{version}
 else
-    git clone -b x86-5.4.119-19-0009.1 https://github.com/Tencent/TencentOS-kernel.git ./tencentos-%{version}
+    git clone -b x86-5.4.119-19-0010.prerelease9 https://github.com/Tencent/TencentOS-kernel.git ./tencentos-%{version}
 fi
 
 %setup -TDn tencentos-%{version}
-# Patches from the Source0 SRPM
-# for patch in ../*.patch; do
-#     patch -p1 <"$patch"
-# done
-# Patches listed in this spec (Patch0001...)
 %autopatch -p1
 if [ %{_cross_arch} == "aarch64" ];then
     cp arch/%{_cross_karch}/configs/defconfig ../config-%{_cross_arch}

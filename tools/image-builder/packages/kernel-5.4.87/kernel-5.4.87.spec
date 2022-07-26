@@ -42,15 +42,10 @@ Summary: Header files for the Linux kernel for use by glibc
 if [ %{_cross_arch} == "aarch64" ];then
     git clone -b public-arm64-5.4.87-19-0004 git@git.woa.com:tlinux/tkernel4.git ./linux-%{version}
 else
-    git clone -b public-x86-5.4.87-19-0004 git@git.woa.com:tlinux/tkernel4.git ./linux-%{version}
+    git clone -b 5.4.119-1-tlinux4-0010 git@git.woa.com:tlinux/tkernel4.git ./linux-%{version}
 fi
 
 %setup -TDn linux-%{version}
-# Patches from the Source0 SRPM
-# for patch in ../*.patch; do
-#     patch -p1 <"$patch"
-# done
-# Patches listed in this spec (Patch0001...)
 %autopatch -p1
 if [ %{_cross_arch} == "aarch64" ];then
     cp arch/%{_cross_karch}/configs/defconfig ../config-%{_cross_arch}

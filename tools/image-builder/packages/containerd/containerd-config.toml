@@ -1,3 +1,5 @@
+## This file is managed by eklet-agent-init
+
 subreaper = true
 oom_score = -999
 disabled_plugins = ["restart"]

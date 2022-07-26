@@ -10,4 +10,4 @@ path = "pkg.rs"
 
 [build-dependencies]
 growpart = { path = "../growpart" }
-libstd-rust = {path = "../libstd-rust"}
+ca-certificates = { path = "../ca-certificates" }

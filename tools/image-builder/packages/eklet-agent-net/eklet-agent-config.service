@@ -1,0 +1,23 @@
+[Unit]
+Description=Config EKLet Agent of Tencent EKS
+Documentation=https://cloud.tencent.com
+DefaultDependencies=no
+Wants=network-pre.target
+BindsTo=dev-sr0.device
+BindsTo=sys-subsystem-net-devices-eth0.device
+After=dev-sr0.device
+After=sys-subsystem-net-devices-eth0.device
+After=systemd-remount-fs.service
+Before=sysinit.target
+Before=network-pre.target
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/eklet-agent/config-network.sh
+RemainAfterExit=yes
+TimeoutSec=0
+
+[Install]
+WantedBy=multi-user.target

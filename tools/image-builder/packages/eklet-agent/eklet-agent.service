@@ -1,7 +1,6 @@
 [Unit]
 Description=EKLet Agent of Tencent EKS
 Documentation=https://cloud.tencent.com
-DefaultDependencies=no
 Wants=eklet-agent-init.service
 Wants=network-online.target
 Wants=containerd.service
@@ -10,7 +9,7 @@ After=network-online.target
 After=containerd.service
 
 [Service]
-ExecStart=eklet-agent
+ExecStart=/opt/eklet-agent/eklet-agent
 
 Type=notify
 Delegate=yes
@@ -26,6 +25,12 @@ LimitNOFILE=1048576
 # Only systemd 226 and above support this version.
 TasksMax=infinity
 OOMScoreAdjust=-999
+CPUAccounting=true
+# High CPU usage when starting
+CPUQuota=90%
+MemoryAccounting=true
+MemoryHigh=400M
+MemoryMax=900M
 
 [Install]
 WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+[package]
+name = "ebpf-tools"
+version = "0.0.1"
+edition = "2018"
+publish = false
+build = "build.rs"
+
+[lib]
+path = "pkg.rs"

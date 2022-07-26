@@ -1,3 +1,5 @@
+%global debug_package %{nil}
+
 %global goproject github.com/opencontainers
 %global gorepo runc
 %global goimport %{goproject}/%{gorepo}
@@ -9,42 +11,40 @@
 
 %global _dwz_low_mem_die_limit 0
 
-Name: %{_cross_os}%{gorepo}
+Name: %{gorepo}
 Version: %{rpmver}
 Release: 1.%{shortcommit}%{?dist}
 Summary: CLI for running Open Containers
 License: Apache-2.0
-URL: https://%{goimport}
-Source0: https://%{goimport}/archive/%{commit}/%{gorepo}-%{commit}.tar.gz
+Source0:https://%{goimport}/archive/%{commit}/%{gorepo}-%{commit}.tar.gz
 
-BuildRequires: git
-BuildRequires: %{_cross_os}glibc-devel
-BuildRequires: %{_cross_os}libseccomp-devel
-Requires: %{_cross_os}libseccomp
+BuildRequires: glibc-devel
+BuildRequires: libseccomp-devel
+Requires: libseccomp
 
 %description
 %{summary}.
 
 %prep
-%autosetup -Sgit -n %{gorepo}-%{commit} -p1
+wget https://%{goimport}/archive/%{commit}/%{gorepo}-%{commit}.tar.gz
+tar -xvf %{gorepo}-%{commit}.tar.gz;
+cp %{gorepo}-%{commit}.tar.gz %{_sourcedir}
 %cross_go_setup %{gorepo}-%{commit} %{goproject} %{goimport}
 
 %build
 %cross_go_configure %{goimport}
 export LD_VERSION="-X main.version=%{gover}+eks"
 export LD_COMMIT="-X main.gitCommit=%{commit}"
-export BUILDTAGS="ambient seccomp"
 go build \
-  -buildmode=pie \
+  -trimpath "-buildmode=pie" \
   -ldflags="-linkmode=external ${LD_VERSION} ${LD_COMMIT}" \
-  -tags="${BUILDTAGS}" \
-  -o bin/runc .
+  -o %{_builddir}/bin/runc .
 
 %install
-install -d %{buildroot}%{_cross_bindir}
-install -p -m 0755 bin/runc %{buildroot}%{_cross_bindir}
+install -d %{buildroot}%{_cross_sbindir}
+install -p -m 0755 %{_builddir}/bin/runc %{buildroot}%{_cross_sbindir}
 
 %files
-%{_cross_bindir}/runc
+%{_cross_sbindir}/runc
 
 %changelog

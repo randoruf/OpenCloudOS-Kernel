@@ -8,7 +8,7 @@
 
 %global _dwz_low_mem_die_limit 0
 
-Name: %{_cross_os}%{gorepo}
+Name: %{gorepo}
 Version: %{rpmver}
 Release: 1%{?dist}
 Summary: An industry-standard container runtime
@@ -16,15 +16,14 @@ License: Apache-2.0
 URL: https://git.woa.com/tke/eks/containerd
 Source1: containerd.service
 Source2: containerd-config.toml
-Source5: containerd-tmpfiles.conf
+Source3: crictl.yaml
 
-BuildRequires: git
-BuildRequires: %{_cross_os}glibc-devel
-BuildRequires: %{_cross_os}libseccomp-devel
-Requires: %{_cross_os}cni-plugins
-Requires: %{_cross_os}libseccomp
-Requires: %{_cross_os}runc
-Requires: %{_cross_os}systemd
+BuildRequires: glibc-devel
+BuildRequires: libseccomp-devel
+Requires: runc
+Requires: systemd
+Requires: libseccomp
+Requires: cni-plugins
 
 %description
 %{summary}.
@@ -58,15 +57,14 @@ done
 
 %install
 cd %{gorepo}-%{gover}
-install -d %{buildroot}%{_cross_bindir}
+install -d %{buildroot}%{_cross_sbindir}
 for bin in \
   containerd \
   containerd-shim \
-  containerd-shim-runc-v1 \
   containerd-shim-runc-v2 \
   ctr ;
 do
-  install -p -m 0755 ${bin} %{buildroot}%{_cross_bindir}
+  install -p -m 0755 ${bin} %{buildroot}%{_cross_sbindir}
 done
 
 install -d %{buildroot}%{_cross_unitdir}
@@ -75,19 +73,16 @@ install -p -m 0644 %{S:1} %{buildroot}%{_cross_unitdir}/containerd.service
 install -d %{buildroot}%{_cross_templatedir}
 install -d %{buildroot}%{_cross_sysconfdir}/containerd
 install -p -m 0644 %{S:2} %{buildroot}%{_cross_sysconfdir}/containerd/config.toml
-
-install -d %{buildroot}%{_cross_tmpfilesdir}
-install -p -m 0644 %{S:5} %{buildroot}%{_cross_tmpfilesdir}/containerd.conf
+install -p -m 0644 %{S:3} %{buildroot}%{_cross_sysconfdir}/crictl.yaml
 
 %files
-%{_cross_bindir}/containerd
-%{_cross_bindir}/containerd-shim
-%{_cross_bindir}/containerd-shim-runc-v1
-%{_cross_bindir}/containerd-shim-runc-v2
-%{_cross_bindir}/ctr
+%{_cross_sbindir}/containerd
+%{_cross_sbindir}/containerd-shim
+%{_cross_sbindir}/containerd-shim-runc-v2
+%{_cross_sbindir}/ctr
 %{_cross_unitdir}/containerd.service
 %dir %{_cross_sysconfdir}/containerd
 %{_cross_sysconfdir}/containerd/config.toml
-%{_cross_tmpfilesdir}/containerd.conf
+%{_cross_sysconfdir}/crictl.yaml
 
 %changelog

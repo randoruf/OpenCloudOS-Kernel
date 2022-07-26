@@ -1,0 +1,27 @@
+[Unit]
+Description=Net of Tencent EKS
+Documentation=https://cloud.tencent.com
+DefaultDependencies=no
+Wants=eklet-agent-config.service
+Wants=eklet-agent-init.service
+After=eklet-agent-config.service
+Before=eklet-agent-init.service
+
+[Service]
+EnvironmentFile=/opt/eklet-agent/net_env
+ExecStartPre=-/sbin/modprobe -- ip_vs sharens=1
+ExecStart=/opt/eklet-agent/eks-net -v1 -i ${IF_NAME} -h ${HOST_IP} -g ${GUEST_IP} -p ${PORT_RANGE}
+Type=simple
+KillMode=process
+Restart=always
+# The default limit is to allow 5 restarts in a 10s period
+RestartSec=2
+OOMScoreAdjust=-999
+CPUAccounting=true
+CPUQuota=25%
+MemoryAccounting=true
+MemoryMax=200M
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target
