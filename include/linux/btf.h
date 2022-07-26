@@ -46,6 +46,9 @@ const struct btf_type *btf_type_id_size(const struct btf *btf,
 void btf_type_seq_show(const struct btf *btf, u32 type_id, void *obj,
 		       struct seq_file *m);
 int btf_get_fd_by_id(u32 id);
+#ifdef BPF_HAS_KERNEL_FLAG
+bool btf_is_kernel(const struct btf *btf);
+#endif
 u32 btf_id(const struct btf *btf);
 bool btf_member_is_reg_int(const struct btf *btf, const struct btf_type *s,
 			   const struct btf_member *m,

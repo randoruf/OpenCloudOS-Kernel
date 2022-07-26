@@ -682,6 +682,13 @@ static int map_create(union bpf_attr *attr)
 			err = PTR_ERR(btf);
 			goto free_map;
 		}
+#ifdef BPF_HAS_KERNEL_FLAG
+		if (btf_is_kernel(btf)) {
+			btf_put(btf);
+			err = -EACCES;
+			goto free_map;
+		}
+#endif
 		map->btf = btf;
 
 		if (attr->btf_value_type_id) {

@@ -3512,3 +3512,10 @@ u32 btf_id(const struct btf *btf)
 {
 	return btf->id;
 }
+
+#ifdef BPF_HAS_KERNEL_FLAG
+bool btf_is_kernel(const struct btf *btf)
+{
+    return btf->kernel_btf;
+}
+#endif

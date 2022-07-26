@@ -3528,6 +3528,9 @@ struct bpf_btf_info {
 	__aligned_u64 btf;
 	__u32 btf_size;
 	__u32 id;
+#ifdef BPF_HAS_KERNEL_FLAG
+	__u32 kernel_btf;
+#endif
 } __attribute__((aligned(8)));
 
 /* User bpf_sock_addr struct to access socket fields and sockaddr struct passed
