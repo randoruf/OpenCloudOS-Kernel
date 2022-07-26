@@ -1,0 +1,10 @@
+*.d
+*.o
+*.so
+*.a
+*.swp
+sysroot
+*.skel.h
+*/bpftool/vmlinux.h
+tools/bpftool/bootstrap
+tools/bpftool/bpftool
