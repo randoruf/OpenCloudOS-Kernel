@@ -101,6 +101,7 @@
 #include <asm/mmu_context.h>
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
+#include <linux/io_uring.h>
 
 #include <trace/events/sched.h>
 
@@ -748,6 +749,9 @@ void __put_task_struct(struct task_struct *tsk)
 	WARN_ON(refcount_read(&tsk->usage));
 	WARN_ON(tsk == current);
 
+#ifdef CONFIG_IO_URING
+	io_uring_free(tsk);
+#endif
 	cgroup_free(tsk);
 	task_numa_free(tsk, true);
 	security_task_free(tsk);
@@ -1942,6 +1946,10 @@ static __latent_entropy struct task_struct *copy_process(
 	seqcount_init(&p->vtime.seqcount);
 	p->vtime.starttime = 0;
 	p->vtime.state = VTIME_INACTIVE;
+#endif
+
+#ifdef CONFIG_IO_URING
+	p->io_uring = NULL;
 #endif
 
 #if defined(SPLIT_RSS_COUNTING)

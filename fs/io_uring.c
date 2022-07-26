@@ -72,6 +72,7 @@
 #include <linux/hugetlb.h>
 #include <linux/highmem.h>
 #include <linux/fs_struct.h>
+#include <linux/io_uring.h>
 
 #include <uapi/linux/io_uring.h>
 
@@ -83,6 +84,22 @@
 struct io_uring {
 	u32 head ____cacheline_aligned_in_smp;
 	u32 tail ____cacheline_aligned_in_smp;
+};
+
+enum {
+    IO_WQ_WORK_CANCEL   = 1,
+    IO_WQ_WORK_HASHED   = 4,
+    IO_WQ_WORK_UNBOUND  = 32, 
+    IO_WQ_WORK_NO_CANCEL    = 256,
+    IO_WQ_WORK_CONCURRENT   = 512,
+
+    IO_WQ_HASH_SHIFT    = 24,   /* upper 8 bits are used for hash key */
+};
+
+enum io_wq_cancel {
+    IO_WQ_CANCEL_OK,    /* cancelled before started */
+    IO_WQ_CANCEL_RUNNING,   /* found, running, and attempted cancelled */
+    IO_WQ_CANCEL_NOTFOUND,  /* work not found */
 };
 
 /*
@@ -676,6 +693,9 @@ static struct io_kiocb *io_get_req(struct io_ring_ctx *ctx,
 	req->flags = 0;
 	/* one is dropped after submission, the other at completion */
 	refcount_set(&req->refs, 2);
+#ifdef CONFIG_IO_URING
+	atomic_long_inc(&req->work_task->io_uring->req_issue);
+#endif
 	req->result = 0;
 	req->fs = NULL;
 	return req;
@@ -3279,6 +3299,36 @@ static int io_sqe_files_register(struct io_ring_ctx *ctx, void __user *arg,
 	return ret;
 }
 
+#ifdef CONFIG_IO_URING
+static int io_uring_alloc_task_context(struct task_struct *task)
+{
+	struct io_uring_task *tctx;
+
+	tctx = kmalloc(sizeof(*tctx), GFP_KERNEL);
+	if (unlikely(!tctx))
+		return -ENOMEM;
+
+	xa_init(&tctx->xa);
+	init_waitqueue_head(&tctx->wait);
+	tctx->last = NULL;
+	tctx->in_idle = 0;
+	atomic_long_set(&tctx->req_issue, 0);
+	atomic_long_set(&tctx->req_complete, 0);
+	task->io_uring = tctx;
+	return 0;
+}
+
+void __io_uring_free(struct task_struct *tsk)
+{
+	struct io_uring_task *tctx = tsk->io_uring;
+
+	WARN_ON_ONCE(!xa_empty(&tctx->xa));
+	xa_destroy(&tctx->xa);
+	kfree(tctx);
+	tsk->io_uring = NULL;
+}
+#endif
+
 static int io_sq_offload_start(struct io_ring_ctx *ctx,
 			       struct io_uring_params *p)
 {
@@ -3317,6 +3367,12 @@ static int io_sq_offload_start(struct io_ring_ctx *ctx,
 			ctx->sqo_thread = NULL;
 			goto err;
 		}
+
+#ifdef CONFIG_IO_URING
+		ret = io_uring_alloc_task_context(ctx->sqo_thread);
+		if (ret)
+			goto err;
+#endif
 		wake_up_process(ctx->sqo_thread);
 	} else if (p->flags & IORING_SETUP_SQ_AFF) {
 		/* Can't have SQ_AFF without SQPOLL */
@@ -3763,12 +3819,227 @@ static void io_ring_ctx_wait_and_kill(struct io_ring_ctx *ctx)
 	io_ring_ctx_free(ctx);
 }
 
+#ifdef CONFIG_IO_URING
+static bool __io_uring_cancel_task_requests(struct io_ring_ctx *ctx,
+					    struct task_struct *task,
+					    struct files_struct *files)
+{
+	bool ret = true;
+
+	(void) io_cancel_async_work(ctx, files);
+	if (!files) {
+#if 0
+		enum io_wq_cancel cret;
+
+		cret = io_wq_cancel_cb(ctx->io_wq, io_cancel_task_cb, task, true);
+		if (cret != IO_WQ_CANCEL_NOTFOUND)
+			ret = true;
+#endif
+
+		/* SQPOLL thread does its own polling */
+		if (!(ctx->flags & IORING_SETUP_SQPOLL)) {
+			if (!list_empty_careful(&ctx->poll_list)) {
+				io_iopoll_reap_events(ctx);
+				ret = true;
+			}
+		}
+
+		io_poll_remove_all(ctx);
+		io_kill_timeouts(ctx);
+	}
+
+	return ret;
+}
+
+/*
+ * We need to iteratively cancel requests, in case a request has dependent
+ * hard links. These persist even for failure of cancelations, hence keep
+ * looping until none are found.
+ */
+static void io_uring_cancel_task_requests(struct io_ring_ctx *ctx,
+					  struct files_struct *files)
+{
+	struct task_struct *task = current;
+
+	if (ctx->flags & IORING_SETUP_SQPOLL)
+		task = ctx->sqo_thread;
+
+#if 0
+	io_cqring_overflow_flush(ctx, true, task, files);
+#endif
+
+	while (__io_uring_cancel_task_requests(ctx, task, files)) {
+#if 0
+		io_run_task_work();
+#endif
+		cond_resched();
+	}
+}
+
+/*
+ * Note that this task has used io_uring. We use it for cancelation purposes.
+ */
+static int io_uring_add_task_file(struct file *file)
+{
+	if (unlikely(!current->io_uring)) {
+		int ret;
+
+		ret = io_uring_alloc_task_context(current);
+		if (unlikely(ret))
+			return ret;
+	}
+	if (current->io_uring->last != file) {
+		XA_STATE(xas, &current->io_uring->xa, (unsigned long) file);
+		void *old;
+
+		rcu_read_lock();
+		old = xas_load(&xas);
+		if (old != file) {
+			get_file(file);
+			xas_lock(&xas);
+			xas_store(&xas, file);
+			xas_unlock(&xas);
+		}
+		rcu_read_unlock();
+		current->io_uring->last = file;
+	}
+
+	return 0;
+}
+
+/*
+ * Remove this io_uring_file -> task mapping.
+ */
+static void io_uring_del_task_file(struct file *file)
+{
+	struct io_uring_task *tctx = current->io_uring;
+	XA_STATE(xas, &tctx->xa, (unsigned long) file);
+
+	if (tctx->last == file)
+		tctx->last = NULL;
+
+	xas_lock(&xas);
+	file = xas_store(&xas, NULL);
+	xas_unlock(&xas);
+
+	if (file)
+		fput(file);
+}
+
+static void __io_uring_attempt_task_drop(struct file *file)
+{
+	XA_STATE(xas, &current->io_uring->xa, (unsigned long) file);
+	struct file *old;
+
+	rcu_read_lock();
+	old = xas_load(&xas);
+	rcu_read_unlock();
+
+	if (old == file)
+		io_uring_del_task_file(file);
+}
+
+/*
+ * Drop task note for this file if we're the only ones that hold it after
+ * pending fput()
+ */
+static void io_uring_attempt_task_drop(struct file *file, bool exiting)
+{
+	if (!current->io_uring)
+		return;
+	/*
+	 * fput() is pending, will be 2 if the only other ref is our potential
+	 * task file note. If the task is exiting, drop regardless of count.
+	 */
+	if (!exiting && atomic_long_read(&file->f_count) != 2)
+		return;
+
+	__io_uring_attempt_task_drop(file);
+}
+
+void __io_uring_files_cancel(struct files_struct *files)
+{
+	struct io_uring_task *tctx = current->io_uring;
+	XA_STATE(xas, &tctx->xa, 0);
+
+	/* make sure overflow events are dropped */
+	tctx->in_idle = true;
+
+	do {
+		struct io_ring_ctx *ctx;
+		struct file *file;
+
+		xas_lock(&xas);
+		file = xas_next_entry(&xas, ULONG_MAX);
+		xas_unlock(&xas);
+
+		if (!file)
+			break;
+
+		ctx = file->private_data;
+
+		io_uring_cancel_task_requests(ctx, files);
+		if (files)
+			io_uring_del_task_file(file);
+	} while (1);
+}
+
+static inline bool io_uring_task_idle(struct io_uring_task *tctx)
+{
+	return atomic_long_read(&tctx->req_issue) ==
+		atomic_long_read(&tctx->req_complete);
+}
+
+/*
+ * Find any io_uring fd that this task has registered or done IO on, and cancel
+ * requests.
+ */
+void __io_uring_task_cancel(void)
+{
+	struct io_uring_task *tctx = current->io_uring;
+	DEFINE_WAIT(wait);
+	long completions;
+
+	/* make sure overflow events are dropped */
+	tctx->in_idle = true;
+
+	while (!io_uring_task_idle(tctx)) {
+		/* read completions before cancelations */
+		completions = atomic_long_read(&tctx->req_complete);
+		__io_uring_files_cancel(NULL);
+
+		prepare_to_wait(&tctx->wait, &wait, TASK_UNINTERRUPTIBLE);
+
+		/*
+		 * If we've seen completions, retry. This avoids a race where
+		 * a completion comes in before we did prepare_to_wait().
+		 */
+		if (completions != atomic_long_read(&tctx->req_complete))
+			continue;
+		if (io_uring_task_idle(tctx))
+			break;
+		schedule();
+	}
+
+	finish_wait(&tctx->wait, &wait);
+	tctx->in_idle = false;
+}
+#endif
+
 static int io_uring_flush(struct file *file, void *data)
 {
 	struct io_ring_ctx *ctx = file->private_data;
 
+#ifdef CONFIG_IO_URING
+	if (fatal_signal_pending(current) || (current->flags & PF_EXITING))
+		data = NULL;
+
+	io_uring_cancel_task_requests(ctx, data);
+	io_uring_attempt_task_drop(file, !data);
+#else
 	if (fatal_signal_pending(current) || (current->flags & PF_EXITING))
 		io_cancel_async_work(ctx, data);
+#endif
 
 	return 0;
 }
@@ -3847,6 +4118,12 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 			wake_up(&ctx->sqo_wait);
 		submitted = to_submit;
 	} else if (to_submit) {
+#ifdef CONFIG_IO_URING
+		ret = io_uring_add_task_file(f.file);
+		if (unlikely(ret))
+			goto out;
+#endif
+
 		to_submit = min(to_submit, ctx->sq_entries);
 
 		mutex_lock(&ctx->uring_lock);
@@ -3952,6 +4229,9 @@ static int io_uring_get_fd(struct io_ring_ctx *ctx)
 	file = anon_inode_getfile("[io_uring]", &io_uring_fops, ctx,
 					O_RDWR | O_CLOEXEC);
 	if (IS_ERR(file)) {
+#ifdef CONFIG_IO_URING
+err_fd:
+#endif
 		put_unused_fd(ret);
 		ret = PTR_ERR(file);
 		goto err;
@@ -3960,6 +4240,13 @@ static int io_uring_get_fd(struct io_ring_ctx *ctx)
 #if defined(CONFIG_UNIX)
 	ctx->ring_sock->file = file;
 	ctx->ring_sock->sk->sk_user_data = ctx;
+#endif
+
+#ifdef CONFIG_IO_URING
+	if (unlikely(io_uring_add_task_file(file))) {
+		file = ERR_PTR(-ENOMEM);
+		goto err_fd;
+	}
 #endif
 	fd_install(ret, file);
 	return ret;
