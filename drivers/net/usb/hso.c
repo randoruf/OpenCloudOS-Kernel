@@ -2364,7 +2364,8 @@ static void hso_free_net_device(struct hso_device *hso_dev)
 
 	remove_net_device(hso_net->parent);
 
-	if (hso_net->net)
+	if (hso_net->net &&
+		hso_net->net->reg_state == NETREG_REGISTERED)
 		unregister_netdev(hso_net->net);
 
 	/* start freeing */
