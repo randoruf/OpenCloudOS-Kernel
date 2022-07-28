@@ -412,7 +412,9 @@ static long ovl_real_ioctl(struct file *file, unsigned int cmd,
 		return ret;
 
 	old_cred = ovl_override_creds(file_inode(file)->i_sb);
-	ret = vfs_ioctl(real.file, cmd, arg);
+	ret = security_file_ioctl(real.file, cmd, arg);
+	if (!ret)
+		ret = vfs_ioctl(real.file, cmd, arg);
 	revert_creds(old_cred);
 
 	fdput(real);
