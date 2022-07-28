@@ -2187,7 +2187,7 @@ static bool ieee80211_parse_tx_radiotap(struct ieee80211_local *local,
 		} else if (rate_flags & IEEE80211_TX_RC_VHT_MCS) {
 			ieee80211_rate_set_vht(info->control.rates, vht_mcs,
 					       vht_nss);
-		} else {
+		} else if (sband){
 			for (i = 0; i < sband->n_bitrates; i++) {
 				if (rate * 5 != sband->bitrates[i].bitrate)
 					continue;
