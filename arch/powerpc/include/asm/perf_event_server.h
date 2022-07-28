@@ -14,6 +14,7 @@
 #define MAX_HWEVENTS		8
 #define MAX_EVENT_ALTERNATIVES	8
 #define MAX_LIMITED_HWCOUNTERS	2
+#define PPMU_P10_DD1               0x00000400 /* Is power10 DD1 processor version */
 
 struct perf_event;
 
