@@ -297,7 +297,7 @@ static inline int ovl_dir_read(struct path *realpath,
 	struct file *realfile;
 	int err;
 
-	realfile = ovl_path_open(realpath, O_RDONLY | O_DIRECTORY);
+	realfile = ovl_path_open(realpath, O_RDONLY | O_LARGEFILE);
 	if (IS_ERR(realfile))
 		return PTR_ERR(realfile);
 
@@ -852,7 +852,7 @@ static int ovl_dir_fsync(struct file *file, loff_t start, loff_t end,
 
 			ovl_path_upper(dentry, &upperpath);
 			old_cred = ovl_override_creds(file_inode(file)->i_sb);
-			realfile = ovl_path_open(&upperpath, O_RDONLY);
+			realfile = ovl_path_open(&upperpath, O_RDONLY | upperpath.f_flags & O_LARGEFILE);
 			revert_creds(old_cred);
 
 			inode_lock(inode);
@@ -906,7 +906,7 @@ static int ovl_dir_open(struct inode *inode, struct file *file)
 
 	type = ovl_path_real(file->f_path.dentry, &realpath);
 	old_cred = ovl_override_creds(file_inode(file)->i_sb);
-	realfile = ovl_path_open(&realpath, file->f_flags);
+	realfile = ovl_path_open(&realpath, O_RDONLY | file->f_flags & O_LARGEFILE);
 	revert_creds(old_cred);
 
 	if (IS_ERR(realfile)) {
