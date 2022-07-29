@@ -348,11 +348,18 @@ struct fuse_req {
 	/* The request input header */
 	struct {
 		struct fuse_in_header h;
+		unsigned numargs;
+		/** Array of arguments */
+		struct fuse_in_arg args[3];
 	} in;
 
 	/* The request output header */
 	struct {
 		struct fuse_out_header h;
+		unsigned numargs;
+		unsigned argvar : 1;
+		/** Array of arguments */
+		struct fuse_arg args[2];
 	} out;
 
 	/** Used to wake up the task waiting for completion of request*/
@@ -517,9 +524,6 @@ struct fuse_conn {
 
 	/** The group id for this mount */
 	kgid_t group_id;
-
-	/** The /dev/fuse file for this mount */
-	struct file *fusedev_file;
 
 	/** The pid namespace for this mount */
 	struct pid_namespace *pid_ns;
@@ -724,9 +728,6 @@ struct fuse_conn {
 
 	/* Do not show mount options */
 	unsigned int no_mount_options:1;
-
-	/** Do not check fusedev_file (virtiofs) */
-	unsigned int check_fusedev_file:1;
 
 	/** The number of requests waiting for completion */
 	atomic_t num_waiting;

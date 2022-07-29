@@ -1,4 +1,5 @@
-/* FUSE: Filesystem in Userspace
+/*
+  FUSE: Filesystem in Userspace
   Copyright (C) 2001-2008  Miklos Szeredi <miklos@szeredi.hu>
 
   This program can be distributed under the terms of the GNU GPL.
@@ -21,7 +22,6 @@
 #include <linux/swap.h>
 #include <linux/splice.h>
 #include <linux/sched.h>
-#include <linux/fdtable.h>
 
 MODULE_ALIAS_MISCDEV(FUSE_MINOR);
 MODULE_ALIAS("devname:fuse");
@@ -358,29 +358,6 @@ static int queue_interrupt(struct fuse_iqueue *fiq, struct fuse_req *req)
 	return 0;
 }
 
-static int match_fusedev(const void *p, struct file *file, unsigned fd)
-{
-	return ((struct fuse_conn *) p)->fusedev_file == file;
-}
-
-static inline bool is_fuse_daemon(struct fuse_conn *fc)
-{
-	return iterate_fd(current->files, 0, match_fusedev, fc);
-}
-
-static inline bool is_conn_untrusted(struct fuse_conn *fc)
-{
-	return (fc->sb->s_iflags & SB_I_UNTRUSTED_MOUNTER);
-}
-
-static inline bool is_event_finished(struct fuse_conn *fc, struct fuse_req *req)
-{
-	if (fc->check_fusedev_file &&
-	    fatal_signal_pending(current) && is_conn_untrusted(fc) && is_fuse_daemon(fc))
-		fuse_abort_conn(fc);
-	return test_bit(FR_FINISHED, &req->flags);
-}
-
 static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req)
 {
 	struct fuse_iqueue *fiq = &fc->iq;
@@ -423,7 +400,7 @@ static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req)
 	 * Either request is already in userspace, or it was forced.
 	 * Wait it out.
 	 */
-	wait_event(req->waitq, is_event_finished(fc, req));
+	wait_event(req->waitq, test_bit(FR_FINISHED, &req->flags));
 }
 
 static void __fuse_request_send(struct fuse_conn *fc, struct fuse_req *req)
@@ -523,7 +500,7 @@ ssize_t fuse_simple_request(struct fuse_conn *fc, struct fuse_args *args)
 	fuse_args_to_req(req, args);
 
 	if (extfuse_request_send(fc, req) != -ENOSYS)
-		return;
+		return PTR_ERR(req);
 	if (!args->noreply)
 		__set_bit(FR_ISREPLY, &req->flags);
 	__fuse_request_send(fc, req);

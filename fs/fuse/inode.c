@@ -1203,8 +1203,6 @@ int fuse_fill_super_common(struct super_block *sb, struct fuse_fs_context *ctx)
 	fc->no_control = ctx->no_control;
 	fc->no_force_umount = ctx->no_force_umount;
 	fc->no_mount_options = ctx->no_mount_options;
-	fc->fusedev_file = fget(ctx->fd);
-	fc->check_fusedev_file = 1;
 
 	err = -ENOMEM;
 	root = fuse_get_root_inode(sb, ctx->rootmode);
@@ -1350,7 +1348,6 @@ static void fuse_sb_destroy(struct super_block *sb)
 
 		fuse_abort_conn(fc);
 		fuse_wait_aborted(fc);
-		fput(fc->fusedev_file);
 
 		down_write(&fc->killsb);
 		fc->sb = NULL;
