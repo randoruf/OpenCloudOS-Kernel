@@ -19,6 +19,7 @@
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
 
+extern void sm3_update(struct sm3_state *sctx, const u8 *data, unsigned int len);
 const u8 sm3_zero_message_hash[SM3_DIGEST_SIZE] = {
 	0x1A, 0xB2, 0x1D, 0x83, 0x55, 0xCF, 0xA1, 0x7F,
 	0x8e, 0x61, 0x19, 0x48, 0x31, 0xE8, 0x1A, 0x8F,
@@ -27,7 +28,7 @@ const u8 sm3_zero_message_hash[SM3_DIGEST_SIZE] = {
 };
 EXPORT_SYMBOL_GPL(sm3_zero_message_hash);
 
-static int crypto_sm3_update(struct shash_desc *desc, const u8 *data,
+int crypto_sm3_update(struct shash_desc *desc, const u8 *data,
 			  unsigned int len)
 {
 	sm3_update(shash_desc_ctx(desc), data, len);
@@ -40,7 +41,7 @@ static int crypto_sm3_final(struct shash_desc *desc, u8 *out)
 	return 0;
 }
 
-static int crypto_sm3_finup(struct shash_desc *desc, const u8 *data,
+int crypto_sm3_finup(struct shash_desc *desc, const u8 *data,
 			unsigned int len, u8 *hash)
 {
 	struct sm3_state *sctx = shash_desc_ctx(desc);

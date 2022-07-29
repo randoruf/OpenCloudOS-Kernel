@@ -325,6 +325,9 @@ const struct bpf_verifier_ops extfuse_verifier_ops = {
 	.is_valid_access = bpf_extfuse_is_valid_access,
 };
 
+EXPORT_SYMBOL(extfuse_verifier_ops);
+
 const struct bpf_prog_ops extfuse_prog_ops = {
 	.test_run = NULL,
 };
+EXPORT_SYMBOL(extfuse_prog_ops);
