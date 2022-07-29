@@ -1827,3 +1827,15 @@ int should_failslab(struct kmem_cache *s, gfp_t gfpflags)
 	return 0;
 }
 ALLOW_ERROR_INJECTION(should_failslab, ERRNO);
+
+void kfree_sensitive(const void *p)
+{   
+    size_t ks;
+    void *mem = (void *)p;
+
+    ks = ksize(mem);
+    if (ks)
+        memzero_explicit(mem, ks);
+    kfree(mem);
+}
+EXPORT_SYMBOL(kfree_sensitive);

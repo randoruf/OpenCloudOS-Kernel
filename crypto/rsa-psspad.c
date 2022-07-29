@@ -24,6 +24,8 @@ struct psspad_request {
 	struct akcipher_request child_req;
 };
 
+extern void kfree_sensitive(const void *p);
+
 static const u8 *psspad_unpack(void *dst, const void *src, size_t sz)
 {
 	memcpy(dst, src, sz);
@@ -342,7 +344,7 @@ static int psspad_create(struct crypto_template *tmpl, struct rtattr **tb)
 	struct akcipher_alg *rsa_alg;
 	int err;
 
-	err = crypto_check_attr_type(tb, CRYPTO_ALG_TYPE_AKCIPHER, &mask);
+	err = crypto_check_attr_type(tb, CRYPTO_ALG_TYPE_AKCIPHER);
 	if (err)
 		return err;
 
@@ -352,8 +354,8 @@ static int psspad_create(struct crypto_template *tmpl, struct rtattr **tb)
 
 	ctx = akcipher_instance_ctx(inst);
 
-	err = crypto_grab_akcipher(&ctx->spawn, akcipher_crypto_instance(inst),
-				   crypto_attr_alg_name(tb[1]), 0, mask);
+	err = crypto_grab_akcipher(&ctx->spawn, crypto_attr_alg_name(tb[1]),
+				   crypto_attr_alg_name(tb[1]), mask);
 	if (err)
 		goto err_free_inst;
 

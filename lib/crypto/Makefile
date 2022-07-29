@@ -11,3 +11,6 @@ libdes-y := des.o
 
 obj-$(CONFIG_CRYPTO_LIB_SHA256) += libsha256.o
 libsha256-y := sha256.o
+
+obj-$(CONFIG_CRYPTO_LIB_SM3)            += libsm3.o
+libsm3-y                    := sm3.o

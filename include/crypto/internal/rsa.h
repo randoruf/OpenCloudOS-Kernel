@@ -10,8 +10,8 @@
 #include <linux/types.h>
 #include <linux/mpi.h>
 #include <linux/oid_registry.h>
-#include <crypto/sha2.h>
 
+#define SHA512_DIGEST_SIZE      64
 #define RSA_MAX_DIGEST_SIZE		SHA512_DIGEST_SIZE
 #define RSA_PSS_DEFAULT_SALT_LEN	20
 

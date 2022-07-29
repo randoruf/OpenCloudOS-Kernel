@@ -258,6 +258,12 @@ static int sm2_z_digest_update_point(struct shash_desc *desc,
 	return ret;
 }
 
+static int crypto_sm3_final(struct shash_desc *desc, u8 *out)
+{
+	sm3_final(shash_desc_ctx(desc), out);
+	return 0;
+}
+
 int sm2_compute_z_digest(struct crypto_akcipher *tfm,
 			const unsigned char *id, size_t id_len,
 			unsigned char dgst[SM3_DIGEST_SIZE])
