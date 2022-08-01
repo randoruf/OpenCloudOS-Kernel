@@ -12,6 +12,10 @@
 enum cpuacct_stat_index {
 	CPUACCT_STAT_USER,	/* ... user mode */
 	CPUACCT_STAT_SYSTEM,	/* ... kernel mode */
+#ifdef CONFIG_BT_SCHED
+	CPUACCT_STAT_BT_USER,      /* ... BT user mode */
+	CPUACCT_STAT_BT_SYSTEM,    /* ... BT kernel mode */
+#endif
 
 	CPUACCT_STAT_NSTATS,
 };
@@ -19,6 +23,10 @@ enum cpuacct_stat_index {
 static const char * const cpuacct_stat_desc[] = {
 	[CPUACCT_STAT_USER] = "user",
 	[CPUACCT_STAT_SYSTEM] = "system",
+#ifdef CONFIG_BT_SCHED
+	[CPUACCT_STAT_BT_USER] = "bt_user",
+	[CPUACCT_STAT_BT_SYSTEM] = "bt_system",
+#endif
 };
 
 struct cpuacct_usage {
@@ -30,6 +38,9 @@ struct cpuacct {
 	struct cgroup_subsys_state	css;
 	/* cpuusage holds pointer to a u64-type object on every CPU */
 	struct cpuacct_usage __percpu	*cpuusage;
+#ifdef CONFIG_BT_SCHED
+	struct cpuacct_usage __percpu *bt_cpuusage;
+#endif
 	struct kernel_cpustat __percpu	*cpustat;
 	struct timespec64 uptime;
 	u64 idletime;
@@ -184,6 +195,131 @@ static u64 cpuusage_sys_read(struct cgroup_subsys_state *css,
 {
 	return __cpuusage_read(css, CPUACCT_STAT_SYSTEM);
 }
+
+#ifdef CONFIG_BT_SCHED
+static u64 cpuacct_bt_cpuusage_read(struct cpuacct *ca, int cpu, enum cpuacct_stat_index index)
+{
+    struct cpuacct_usage *bt_cpuusage = per_cpu_ptr(ca->bt_cpuusage, cpu);
+    u64 data;
+
+	/*
+	 * We allow index == CPUACCT_STAT_NSTATS here to read
+	 * the sum of suages.
+	 */
+	BUG_ON(index > CPUACCT_STAT_NSTATS);
+
+#ifndef CONFIG_64BIT
+	/*
+	 * Take rq->lock to make 64-bit read safe on 32-bit platforms.
+	 */
+	raw_spin_lock_irq(&cpu_rq(cpu)->lock);
+#endif
+
+	if (index == CPUACCT_STAT_NSTATS) {
+		int i = 0;
+
+		data = 0;
+		for (i = 0; i < CPUACCT_STAT_NSTATS; i++)
+			data += bt_cpuusage->usages[i];
+	} else {
+		data = bt_cpuusage->usages[index];
+	}
+
+#ifndef CONFIG_64BIT
+	raw_spin_unlock_irq(&cpu_rq(cpu)->lock);
+#endif
+
+        return data;
+}
+
+static void cpuacct_bt_cpuusage_write(struct cpuacct *ca, int cpu, u64 val)
+{
+        struct cpuacct_usage *bt_cpuusage = per_cpu_ptr(ca->bt_cpuusage, cpu);
+		int i;
+
+#ifndef CONFIG_64BIT
+	/*
+	 * Take rq->lock to make 64-bit write safe on 32-bit platforms.
+	 */
+	raw_spin_lock_irq(&cpu_rq(cpu)->lock);
+#endif
+
+	for (i = 0; i < CPUACCT_STAT_NSTATS; i++)
+		bt_cpuusage->usages[i] = val;
+
+#ifndef CONFIG_64BIT
+	raw_spin_unlock_irq(&cpu_rq(cpu)->lock);
+#endif
+}
+
+static u64 bt_cpuusage_read(struct cgroup_subsys_state *css, struct cftype *cft)
+{
+	struct cpuacct *ca = css_ca(css);
+	u64 totalcpuusage = 0;
+	int i;
+
+	for_each_present_cpu(i)
+		totalcpuusage += cpuacct_bt_cpuusage_read(ca, i, CPUACCT_STAT_NSTATS);
+
+	return totalcpuusage;
+}
+
+static int bt_cpuusage_write(struct cgroup_subsys_state *css, struct cftype *cftype, u64 reset)
+{
+	struct cpuacct *ca = css_ca(css);
+	int err = 0;
+	int i;
+
+	if (reset) {
+		err = -EINVAL;
+		goto out;
+	}
+
+	for_each_present_cpu(i)
+		cpuacct_bt_cpuusage_write(ca, i, 0);
+
+out:
+    return err;
+}
+
+static int bt_cpuacct_percpu_seq_read(struct seq_file *m,
+				     enum cpuacct_stat_index index)
+{
+	struct cpuacct *ca = css_ca(seq_css(m));
+	u64 percpu;
+	int i;
+
+	for_each_present_cpu(i) {
+		percpu = cpuacct_bt_cpuusage_read(ca, i, CPUACCT_STAT_NSTATS);
+		seq_printf(m, "%llu ", (unsigned long long) percpu);
+	}
+	seq_printf(m, "\n");
+
+	return 0;
+}
+
+static int bt_cpuacct_percpu_seq_show(struct seq_file *m, void *V)
+{
+	return bt_cpuacct_percpu_seq_read(m, CPUACCT_STAT_NSTATS);
+}
+
+void bt_cpuacct_charge(struct task_struct *tsk, u64 cputime)
+{
+	struct cpuacct *ca;
+	int index = CPUACCT_STAT_BT_SYSTEM;
+	struct pt_regs *regs = task_pt_regs(tsk);
+
+	if (regs && user_mode(regs))
+		index = CPUACCT_STAT_BT_USER;
+
+	rcu_read_lock();
+
+	for (ca = task_ca(tsk); ca; ca = parent_ca(ca))
+		this_cpu_ptr(ca->bt_cpuusage)->usages[index] += cputime;
+
+	rcu_read_unlock();
+}
+#endif
 
 static u64 cpuusage_read(struct cgroup_subsys_state *css, struct cftype *cft)
 {

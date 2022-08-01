@@ -6,6 +6,9 @@
 #include "sched.h"
 
 unsigned int __read_mostly sysctl_sched_autogroup_enabled = 0;
+#ifdef CONFIG_BT_SCHED
+unsigned int __read_mostly offlinegroup_enabled = 0;
+#endif
 static struct autogroup autogroup_default;
 static atomic_t autogroup_seq_nr;
 

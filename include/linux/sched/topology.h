@@ -78,6 +78,14 @@ struct sched_domain {
 	unsigned int busy_factor;	/* less balancing by factor if busy */
 	unsigned int imbalance_pct;	/* No balance until over watermark */
 	unsigned int cache_nice_tries;	/* Leave cache hot tasks for # tries */
+#ifdef CONFIG_BT_SCHED
+	unsigned int busy_idx;
+	unsigned int idle_idx;
+	unsigned int newidle_idx;
+	unsigned int wake_idx;
+	unsigned int forkexec_idx;
+	unsigned int smt_gain;
+#endif
 
 	int nohz_idle;			/* NOHZ IDLE status */
 	int flags;			/* See SD_* */
@@ -87,6 +95,11 @@ struct sched_domain {
 	unsigned long last_balance;	/* init to jiffies. units in jiffies */
 	unsigned int balance_interval;	/* initialise to 1. units in ms. */
 	unsigned int nr_balance_failed; /* initialise to 0 */
+#ifdef CONFIG_BT_SCHED
+	unsigned long last_balance_bt;	/* init to jiffies. units in jiffies */
+	unsigned int balance_interval_bt;	/* initialise to 1. units in ms. */
+	unsigned int nr_balance_failed_bt; /* initialise to 0 */
+#endif
 
 	/* idle_balance() stats */
 	u64 max_newidle_lb_cost;

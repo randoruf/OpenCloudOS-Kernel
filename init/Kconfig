@@ -1121,6 +1121,12 @@ config NET_NS
 
 endif # NAMESPACES
 
+config BT_SCHED
+    bool "offline sched class"
+    default n
+    help 
+        Allow user to create offline task
+
 config CHECKPOINT_RESTORE
 	bool "Checkpoint/restore support"
 	select PROC_CHILDREN

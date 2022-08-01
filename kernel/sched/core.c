@@ -20,6 +20,10 @@
 
 #include "pelt.h"
 #include <linux/sli.h>
+#ifdef CONFIG_BT_SCHED
+#include "batch.h"
+#include <linux/sched/batch.h>
+#endif
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
@@ -58,6 +62,12 @@ const_debug unsigned int sysctl_sched_features =
  * Limited because this is done with IRQs disabled.
  */
 const_debug unsigned int sysctl_sched_nr_migrate = 32;
+
+#ifdef CONFIG_BT_SCHED
+int sysctl_sched_bt_runtime = -1;
+unsigned int sysctl_sched_bt_period = 1000000;
+const_debug unsigned int sysctl_sched_time_avg = MSEC_PER_SEC;
+#endif
 
 /*
  * period over which we measure -rt task CPU usage in us.
@@ -219,6 +229,30 @@ void update_rq_clock(struct rq *rq)
 	update_rq_clock_task(rq, delta);
 }
 
+#ifdef CONFIG_BT_SCHED
+/**
+ * idle_bt_cpu - is a given cpu idle or bt task currently?
+ * @cpu: the processor in question.
+ */
+int idle_bt_cpu(int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+
+	if (rq->curr != rq->idle && !bt_prio(rq->curr->prio))
+		return 0;
+
+	if (rq->nr_running - rq->bt_nr_running)
+		return 0;
+
+#ifdef CONFIG_SMP
+	if (!llist_empty(&rq->wake_list))
+		return 0;
+#endif
+
+	return 1;
+}
+#endif
+
 
 #ifdef CONFIG_SCHED_HRTICK
 /*
@@ -315,6 +349,7 @@ void hrtick_start(struct rq *rq, u64 delay)
 	hrtimer_start(&rq->hrtick_timer, ns_to_ktime(delay),
 		      HRTIMER_MODE_REL_PINNED_HARD);
 }
+
 #endif /* CONFIG_SMP */
 
 static void hrtick_rq_init(struct rq *rq)
@@ -696,6 +731,23 @@ bool sched_can_stop_tick(struct rq *rq)
 	return true;
 }
 #endif /* CONFIG_NO_HZ_FULL */
+#ifdef CONFIG_BT_SCHED
+void sched_avg_update(struct rq *rq)
+{
+	s64 period = sched_avg_period();
+
+	while ((s64)(rq_clock(rq) - rq->age_stamp) > period) {
+		/*
+		 * Inline assembly required to prevent the compiler
+		 * optimising this loop into a divmod call.
+		 * See __iter_div_u64_rem() for another example of this.
+		 */
+		asm("" : "+rm" (rq->age_stamp));
+		rq->age_stamp += period;
+		rq->rt_avg /= 2;
+	}
+}
+#endif
 #endif /* CONFIG_SMP */
 
 #if defined(CONFIG_RT_GROUP_SCHED) || (defined(CONFIG_FAIR_GROUP_SCHED) && \

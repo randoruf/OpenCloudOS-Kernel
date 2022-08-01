@@ -23,7 +23,10 @@
 /*
  * Ease the printing of nsec fields:
  */
-static long long nsec_high(unsigned long long nsec)
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+long long nsec_high(unsigned long long nsec)
 {
 	if ((long long)nsec < 0) {
 		nsec = -nsec;
@@ -35,7 +38,10 @@ static long long nsec_high(unsigned long long nsec)
 	return nsec;
 }
 
-static unsigned long nsec_low(unsigned long long nsec)
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+unsigned long nsec_low(unsigned long long nsec)
 {
 	if ((long long)nsec < 0)
 		nsec = -nsec;

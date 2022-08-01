@@ -107,6 +107,18 @@
 
 static int kernel_init(void *);
 
+#ifdef CONFIG_BT_SCHED
+unsigned int sched_bt_on = 0;
+
+static int __init set_sched_bt_on(char *str)
+{
+	sched_bt_on = 1; 
+
+	return 0;
+}
+early_param("offline_class", set_sched_bt_on);
+#endif
+
 extern void init_IRQ(void);
 extern void radix_tree_init(void);
 

@@ -74,6 +74,10 @@
 
 #include "cpupri.h"
 #include "cpudeadline.h"
+#ifdef CONFIG_BT_SCHED
+#include "batch.h"
+#include "cpuacct.h"
+#endif
 
 #ifdef CONFIG_SCHED_DEBUG
 # define SCHED_WARN_ON(x)	WARN_ONCE(x, #x)
@@ -88,6 +92,16 @@ struct cpuidle_state;
 #define TASK_ON_RQ_QUEUED	1
 #define TASK_ON_RQ_MIGRATING	2
 
+#ifdef CONFIG_BT_SCHED
+extern void free_bt_sched_group(struct task_group *tg);
+extern int alloc_bt_sched_group(struct task_group *tg, struct task_group *parent);
+extern void online_bt_sched_group(struct task_group *tg);
+extern int sched_group_set_bt_shares(struct task_group *tg, unsigned long shares);
+extern void unregister_bt_sched_group(struct task_group *tg);
+extern void init_tg_bt_entry(struct task_group *tg, struct bt_rq *bt_rq,
+                       struct sched_entity *se, int cpu,
+                       struct sched_entity *parent);
+#endif
 extern __read_mostly int scheduler_running;
 
 extern unsigned long calc_load_update;
@@ -175,6 +189,9 @@ static inline int dl_policy(int policy)
 static inline bool valid_policy(int policy)
 {
 	return idle_policy(policy) || fair_policy(policy) ||
+#ifdef  CONFIG_BT_SCHED
+		bt_policy(policy) ||
+#endif
 		rt_policy(policy) || dl_policy(policy);
 }
 
@@ -483,7 +500,13 @@ extern int sched_group_set_shares(struct task_group *tg, unsigned long shares);
 #ifdef CONFIG_SMP
 extern void set_task_rq_fair(struct sched_entity *se,
 			     struct cfs_rq *prev, struct cfs_rq *next);
+#ifdef CONFIG_BT_SCHED
+extern void update_cpu_bt_load_active(struct rq *this_rq);
+#endif
 #else /* !CONFIG_SMP */
+#ifdef CONFIG_BT_SCHED
+static inline void update_cpu_bt_load_active(struct rq *this_rq) { }
+#endif
 static inline void set_task_rq_fair(struct sched_entity *se,
 			     struct cfs_rq *prev, struct cfs_rq *next) { }
 #endif /* CONFIG_SMP */
@@ -494,6 +517,22 @@ static inline void set_task_rq_fair(struct sched_entity *se,
 struct cfs_bandwidth { };
 
 #endif	/* CONFIG_CGROUP_SCHED */
+
+#ifdef  CONFIG_BT_SCHED
+#define RQ_CFS_NR_UNINTERRUPTIBLE(rq)                           \
+	((rq)->nr_uninterruptible - (rq)->bt.nr_uninterruptible)
+
+#define RQ_CFS_NR_RUNNING(rq)       \
+	((rq)->nr_running - (rq)->bt_nr_running)
+
+#else
+#define RQ_CFS_NR_UNINTERRUPTIBLE(rq)    \
+	((rq)->nr_uninterruptible)
+
+#define RQ_CFS_NR_RUNNING(rq)       \
+	((rq)->nr_running)
+
+#endif
 
 /* CFS-related fields in a runqueue */
 struct cfs_rq {
@@ -753,6 +792,9 @@ struct root_domain {
 	 * - Running task is misfit
 	 */
 	int			overload;
+#ifdef CONFIG_BT_SCHED
+	bool overload_bt;
+#endif
 
 	/* Indicate one or more cpus over-utilized (tipping point) */
 	int			overutilized;
@@ -871,16 +913,30 @@ struct rq {
 	 * remote CPUs use both these fields when doing load calculation.
 	 */
 	unsigned int		nr_running;
+#ifdef CONFIG_BT_SCHED
+	unsigned int bt_nr_running;
+	u64 bt_blocked_clock;
+#endif
 #ifdef CONFIG_NUMA_BALANCING
 	unsigned int		nr_numa_running;
 	unsigned int		nr_preferred_running;
 	unsigned int		numa_migrate_on;
+#endif
+#ifdef CONFIG_BT_SCHED
+	#define CPU_LOAD_IDX_MAX 5
+	unsigned long cpu_bt_load[CPU_LOAD_IDX_MAX];
+	#define CPU_LOAD_IDX_MAX 5
+	unsigned long cpu_load[CPU_LOAD_IDX_MAX];
 #endif
 #ifdef CONFIG_NO_HZ_COMMON
 #ifdef CONFIG_SMP
 	unsigned long		last_load_update_tick;
 	unsigned long		last_blocked_load_update_tick;
 	unsigned int		has_blocked_load;
+#ifdef CONFIG_BT_SCHED
+	unsigned long last_bt_load_update_tick;
+	unsigned long do_lb;
+#endif
 #endif /* CONFIG_SMP */
 	unsigned int		nohz_tick_stopped;
 	atomic_t nohz_flags;
@@ -888,6 +944,10 @@ struct rq {
 
 	unsigned long		nr_load_updates;
 	u64			nr_switches;
+#ifdef CONFIG_BT_SCHED
+	struct load_weight bt_load;
+	unsigned long nr_bt_load_updates;
+#endif
 
 #ifdef CONFIG_UCLAMP_TASK
 	/* Utilization clamp values based on CPU's RUNNABLE tasks */
@@ -899,6 +959,9 @@ struct rq {
 	struct cfs_rq		cfs;
 	struct rt_rq		rt;
 	struct dl_rq		dl;
+#ifdef CONFIG_BT_SCHED
+	struct bt_rq bt;
+#endif
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* list of leaf cfs_rq on this CPU: */
@@ -918,6 +981,9 @@ struct rq {
 	struct task_struct	*idle;
 	struct task_struct	*stop;
 	unsigned long		next_balance;
+#ifdef CONFIG_BT_SCHED
+	unsigned long next_balance_bt;
+#endif
 	struct mm_struct	*prev_mm;
 
 	unsigned int		clock_update_flags;
@@ -951,11 +1017,21 @@ struct rq {
 	int			push_cpu;
 	struct cpu_stop_work	active_balance_work;
 
+#ifdef CONFIG_BT_SCHED
+	int active_balance_bt;
+	int push_cpu_bt;
+	struct cpu_stop_work active_bt_balance_work;
+#endif
 	/* CPU of this runqueue: */
 	int			cpu;
 	int			online;
 
 	struct list_head cfs_tasks;
+#ifdef CONFIG_BT_SCHED
+	struct list_head bt_tasks;
+	u64 age_stamp;
+	u64 rt_avg;
+#endif
 
 	struct sched_avg	avg_rt;
 	struct sched_avg	avg_dl;
@@ -1411,6 +1487,10 @@ struct sched_group_capacity {
 	 * for a single CPU.
 	 */
 	unsigned long		capacity;
+#ifdef CONFIG_BT_SCHED
+	unsigned long capacity_orig;
+	unsigned long capacity_bt;
+#endif
 	unsigned long		min_capacity;		/* Min per-CPU capacity in group */
 	unsigned long		max_capacity;		/* Max per-CPU capacity in group */
 	unsigned long		next_update;
@@ -1427,6 +1507,9 @@ struct sched_group {
 	struct sched_group	*next;			/* Must be a circular list */
 	atomic_t		ref;
 
+#ifdef CONFIG_BT_SCHED
+	int bt_balance_cpu;
+#endif
 	unsigned int		group_weight;
 	struct sched_group_capacity *sgc;
 	int			asym_prefer_cpu;	/* CPU of highest priority in group */
@@ -1465,6 +1548,16 @@ static inline unsigned int group_first_cpu(struct sched_group *group)
 {
 	return cpumask_first(sched_group_span(group));
 }
+
+#ifdef CONFIG_BT_SCHED
+#define tsk_cpus_allowed(tsk) (&(tsk)->cpus_mask)
+
+struct sched_group;
+static inline struct cpumask *sched_group_cpus(struct sched_group *sg)
+{
+	return to_cpumask(sg->cpumask);
+}
+#endif
 
 extern int group_balance_cpu(struct sched_group *sg);
 
@@ -1585,6 +1678,13 @@ enum {
 
 #undef SCHED_FEAT
 
+#ifdef CONFIG_BT_SCHED
+extern int sysctl_sched_bt_runtime;
+extern unsigned int sysctl_sched_bt_period;
+extern const_debug unsigned int sysctl_sched_time_avg;
+#endif
+
+
 #ifdef CONFIG_SCHED_DEBUG
 
 /*
@@ -1645,6 +1745,21 @@ static inline u64 global_rt_runtime(void)
 
 	return (u64)sysctl_sched_rt_runtime * NSEC_PER_USEC;
 }
+
+#ifdef CONFIG_BT_SCHED
+static inline u64 global_bt_period(void)
+{
+	return (u64)sysctl_sched_bt_period * NSEC_PER_USEC;
+}
+
+static inline u64 global_bt_runtime(void)
+{
+	if (sysctl_sched_bt_runtime < 0)
+		return RUNTIME_INF;
+
+	return (u64)sysctl_sched_bt_runtime * NSEC_PER_USEC;
+}
+#endif
 
 static inline int task_current(struct rq *rq, struct task_struct *p)
 {
@@ -1776,6 +1891,9 @@ struct sched_class {
 	void (*rq_offline)(struct rq *rq);
 #endif
 
+#ifdef CONFIG_BT_SCHED
+	void (*set_curr_task) (struct rq *rq);
+#endif
 	void (*task_tick)(struct rq *rq, struct task_struct *p, int queued);
 	void (*task_fork)(struct task_struct *p);
 	void (*task_dead)(struct task_struct *p);
@@ -1901,6 +2019,12 @@ extern void update_max_interval(void);
 extern void init_sched_dl_class(void);
 extern void init_sched_rt_class(void);
 extern void init_sched_fair_class(void);
+#ifdef CONFIG_BT_SCHED
+extern void init_sched_bt_class(void);
+extern void update_idle_cpu_bt_load(struct rq *this_rq);
+extern void init_bt_entity_runnable_average(struct sched_entity *se);
+extern void post_init_bt_entity_util_avg(struct sched_entity *se);
+#endif
 
 extern void reweight_task(struct task_struct *p, int prio);
 
@@ -1963,10 +2087,24 @@ static inline void add_nr_running(struct rq *rq, unsigned count)
 
 	rq->nr_running = prev_nr + count;
 
+#ifndef CONFIG_BT_SCHED
 #ifdef CONFIG_SMP
 	if (prev_nr < 2 && rq->nr_running >= 2) {
 		if (!READ_ONCE(rq->rd->overload))
 			WRITE_ONCE(rq->rd->overload, 1);
+	}
+#endif
+#else
+#ifdef CONFIG_SMP
+	if (!rq->rd->overload && (rq->nr_running - rq->bt_nr_running >= 2))
+		 rq->rd->overload = true;
+#endif
+
+	if (rq->nr_running >= 2) {
+#ifdef CONFIG_SMP
+		if (rq->bt_nr_running && !rq->rd->overload_bt)
+			rq->rd->overload_bt = true;
+#endif
 	}
 #endif
 
@@ -1987,6 +2125,13 @@ extern void check_preempt_curr(struct rq *rq, struct task_struct *p, int flags);
 
 extern const_debug unsigned int sysctl_sched_nr_migrate;
 extern const_debug unsigned int sysctl_sched_migration_cost;
+
+#ifdef CONFIG_BT_SCHED
+static inline u64 sched_avg_period(void)
+{
+	return (u64)sysctl_sched_time_avg * NSEC_PER_MSEC / 2;
+}
+#endif
 
 #ifdef CONFIG_SCHED_HRTICK
 
@@ -2023,7 +2168,16 @@ unsigned long arch_scale_freq_capacity(int cpu)
 }
 #endif
 
+#ifdef CONFIG_BT_SCHED
+extern inline void update_load_add(struct load_weight *lw, unsigned long inc);
+extern inline void update_load_sub(struct load_weight *lw, unsigned long dec);
+extern inline void update_load_set(struct load_weight *lw, unsigned long w);
+#endif
+
 #ifdef CONFIG_SMP
+#ifdef CONFIG_BT_SCHED
+extern void sched_avg_update(struct rq *rq);
+#endif
 #ifdef CONFIG_PREEMPTION
 
 static inline void double_rq_lock(struct rq *rq1, struct rq *rq2);
@@ -2205,6 +2359,10 @@ static inline void double_rq_unlock(struct rq *rq1, struct rq *rq2)
 	__release(rq2->lock);
 }
 
+#ifdef CONFIG_BT_SCHED
+static inline void sched_avg_update(struct rq *rq) { }
+#endif
+
 #endif
 
 extern struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq);
@@ -2243,6 +2401,10 @@ extern void cfs_bandwidth_usage_dec(void);
 #define NOHZ_STATS_KICK		BIT(NOHZ_STATS_KICK_BIT)
 
 #define NOHZ_KICK_MASK	(NOHZ_BALANCE_KICK | NOHZ_STATS_KICK)
+
+#ifdef CONFIG_BT_SCHED
+#define nohz_flags1(cpu)	((unsigned long *)&cpu_rq(cpu)->nohz_flags)
+#endif
 
 #define nohz_flags(cpu)	(&cpu_rq(cpu)->nohz_flags)
 
@@ -2545,6 +2707,13 @@ static inline bool sched_energy_enabled(void)
 static inline bool sched_energy_enabled(void) { return false; }
 
 #endif /* CONFIG_ENERGY_MODEL && CONFIG_CPU_FREQ_GOV_SCHEDUTIL */
+
+#ifdef CONFIG_BT_SCHED
+static inline int bt_bandwidth_enabled(void)
+{
+	return sysctl_sched_bt_runtime >= 0;
+}
+#endif
 
 #ifdef CONFIG_MEMBARRIER
 /*

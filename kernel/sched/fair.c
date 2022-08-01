@@ -124,23 +124,77 @@ unsigned int sysctl_sched_cfs_bandwidth_slice		= 5000UL;
 unsigned int sysctl_sched_cfs_bw_burst_enabled;
 #endif
 
-static inline void update_load_add(struct load_weight *lw, unsigned long inc)
+#ifdef CONFIG_BT_SCHED
+unsigned long source_load(int cpu, int type);
+unsigned long target_load(int cpu, int type);
+unsigned long weighted_cpuload(struct rq *rq);
+static inline unsigned long cfs_rq_runnable_load_avg(struct cfs_rq *cfs_rq);
+#endif
+
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+inline void update_load_add(struct load_weight *lw, unsigned long inc)
 {
 	lw->weight += inc;
 	lw->inv_weight = 0;
 }
 
-static inline void update_load_sub(struct load_weight *lw, unsigned long dec)
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+inline void update_load_sub(struct load_weight *lw, unsigned long dec)
 {
 	lw->weight -= dec;
 	lw->inv_weight = 0;
 }
 
-static inline void update_load_set(struct load_weight *lw, unsigned long w)
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+inline void update_load_set(struct load_weight *lw, unsigned long w)
 {
 	lw->weight = w;
 	lw->inv_weight = 0;
 }
+
+#ifdef CONFIG_BT_SCHED
+/* Used instead of source_load when we know the type == 0 */
+unsigned long weighted_cpuload(struct rq *rq)
+{
+	return cfs_rq_runnable_load_avg(&rq->cfs);
+}
+
+/*
+ * Return a low guess at the load of a migration-source cpu weighted
+ * according to the scheduling class and "nice" value.
+ *
+ * We want to under-estimate the load of migration sources, to
+ * balance conservatively.
+ */
+unsigned long source_load(int cpu, int type)
+{
+	struct rq *rq = cpu_rq(cpu);
+	unsigned long total = weighted_cpuload(rq);
+
+	if (type == 0 || !sched_feat(LB_BIAS))
+		return total;
+
+	return min(rq->cpu_load[type-1], total);
+}
+
+unsigned long target_load(int cpu, int type)
+{
+	struct rq *rq = cpu_rq(cpu);
+	unsigned long total = weighted_cpuload(rq);
+
+	if (type == 0 || !sched_feat(LB_BIAS))
+		return total;
+
+	return max(rq->cpu_load[type-1], total);
+}
+
+#endif
 
 /*
  * Increase the granularity value when there are more CPUs,
@@ -172,7 +226,10 @@ static unsigned int get_update_sysctl_factor(void)
 	return factor;
 }
 
-static void update_sysctl(void)
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+void update_sysctl(void)
 {
 	unsigned int factor = get_update_sysctl_factor();
 
@@ -221,7 +278,10 @@ static void __update_inv_weight(struct load_weight *lw)
  * Or, weight =< lw.weight (because lw.weight is the runqueue weight), thus
  * weight/lw.weight <= 1, and therefore our shift will also be positive.
  */
-static u64 __calc_delta(u64 delta_exec, unsigned long weight, struct load_weight *lw)
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+u64 __calc_delta(u64 delta_exec, unsigned long weight, struct load_weight *lw)
 {
 	u64 fact = scale_load_down(weight);
 	int shift = WMULT_SHIFT;
@@ -681,7 +741,10 @@ static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se)
  *
  * p = (nr <= nl) ? l : l*nr/nl
  */
-static u64 __sched_period(unsigned long nr_running)
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+u64 __sched_period(unsigned long nr_running)
 {
 	if (unlikely(nr_running > sched_nr_latency))
 		return nr_running * sysctl_sched_min_granularity;
@@ -2681,7 +2744,10 @@ void init_numa_balancing(unsigned long clone_flags, struct task_struct *p)
 /*
  * Drive the periodic memory faults..
  */
-static void task_tick_numa(struct rq *rq, struct task_struct *curr)
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+void task_tick_numa(struct rq *rq, struct task_struct *curr)
 {
 	struct callback_head *work = &curr->numa_work;
 	u64 period, now;
@@ -5475,7 +5541,10 @@ DEFINE_PER_CPU(cpumask_var_t, select_idle_mask);
 
 #ifdef CONFIG_NO_HZ_COMMON
 
-static struct {
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+struct {
 	cpumask_var_t idle_cpus_mask;
 	atomic_t nr_cpus;
 	int has_blocked;		/* Idle CPUS has blocked load */
@@ -7204,7 +7273,10 @@ static bool yield_to_task_fair(struct rq *rq, struct task_struct *p, bool preemp
  *      rewrite all of this once again.]
  */
 
-static unsigned long __read_mostly max_load_balance_interval = HZ/10;
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+unsigned long __read_mostly max_load_balance_interval = HZ/10;
 
 enum fbq_type { regular, remote, all };
 
@@ -7469,7 +7541,10 @@ static struct task_struct *detach_one_task(struct lb_env *env)
 	return NULL;
 }
 
-static const unsigned int sched_nr_migrate_break = 32;
+#ifndef CONFIG_BT_SCHED
+static
+#endif
+const unsigned int sched_nr_migrate_break = 32;
 
 /*
  * detach_tasks() -- tries to detach up to imbalance runnable load from
@@ -8134,6 +8209,149 @@ group_type group_classify(struct sched_group *group,
 
 	return group_other;
 }
+
+#ifdef CONFIG_BT_SCHED
+/*
+ * per rq 'load' arrray crap; XXX kill this.
+ */
+
+/*
+ * The exact cpuload calculated at every tick would be:
+ *
+ *   load' = (1 - 1/2^i) * load + (1/2^i) * cur_load
+ *
+ * If a cpu misses updates for n ticks (as it was idle) and update gets
+ * called on the n+1-th tick when cpu may be busy, then we have:
+ *
+ *   load_n   = (1 - 1/2^i)^n * load_0
+ *   load_n+1 = (1 - 1/2^i)   * load_n + (1/2^i) * cur_load
+ *
+ * decay_load_missed() below does efficient calculation of
+ *
+ *   load' = (1 - 1/2^i)^n * load
+ *
+ * Because x^(n+m) := x^n * x^m we can decompose any x^n in power-of-2 factors.
+ * This allows us to precompute the above in said factors, thereby allowing the
+ * reduction of an arbitrary n in O(log_2 n) steps. (See also
+ * fixed_power_int())
+ *
+ * The calculation is approximated on a 128 point scale.
+ */
+#define DEGRADE_SHIFT		7
+
+static const u8 degrade_zero_ticks[CPU_LOAD_IDX_MAX] = {0, 8, 32, 64, 128};
+static const u8 degrade_factor[CPU_LOAD_IDX_MAX][DEGRADE_SHIFT + 1] = {
+	{   0,   0,  0,  0,  0,  0, 0, 0 },
+	{  64,  32,  8,  0,  0,  0, 0, 0 },
+	{  96,  72, 40, 12,  1,  0, 0, 0 },
+	{ 112,  98, 75, 43, 15,  1, 0, 0 },
+	{ 120, 112, 98, 76, 45, 16, 2, 0 }
+};
+/*
+ * Update cpu_load for any missed ticks, due to tickless idle. The backlog
+ * would be when CPU is idle and so we just decay the old load without
+ * adding any new load.
+ */
+static unsigned long
+decay_load_missed(unsigned long load, unsigned long missed_updates, int idx)
+{
+	int j = 0;
+
+	if (!missed_updates)
+		return load;
+
+	if (missed_updates >= degrade_zero_ticks[idx])
+		return 0;
+
+	if (idx == 1)
+		return load >> missed_updates;
+
+	while (missed_updates) {
+		if (missed_updates % 2)
+			load = (load * degrade_factor[idx][j]) >> DEGRADE_SHIFT;
+
+		missed_updates >>= 1;
+		j++;
+	}
+	return load;
+}
+
+static void __update_cpu_bt_load(struct rq *this_rq, unsigned long this_load,
+			      unsigned long pending_updates)
+{
+	int i, scale;
+
+	this_rq->nr_load_updates++;
+
+	/* Update our load: */
+	this_rq->cpu_bt_load[0] = this_load; /* Fasttrack for idx 0 */
+	for (i = 1, scale = 2; i < CPU_LOAD_IDX_MAX; i++, scale += scale) {
+		unsigned long old_load, new_load;
+
+		/* scale is effectively 1 << i now, and >> i divides by scale */
+
+		old_load = this_rq->cpu_bt_load[i];
+		old_load = decay_load_missed(old_load, pending_updates - 1, i);
+		new_load = this_load;
+		/*
+		 * Round up the averaging division if load is increasing. This
+		 * prevents us from getting stuck on 9 if the load is 10, for
+		 * example.
+		 */
+		if (new_load > old_load)
+			new_load += scale - 1;
+
+		this_rq->cpu_bt_load[i] = (old_load * (scale - 1) + new_load) >> i;
+	}
+
+	sched_avg_update(this_rq);
+}
+
+void update_idle_cpu_bt_load(struct rq *this_rq)
+{
+	unsigned long curr_jiffies = ACCESS_ONCE(jiffies);
+	unsigned long load = this_rq->bt_load.weight;
+	unsigned long pending_updates;
+
+	/*
+	 * bail if there's load or we're actually up-to-date.
+	 */
+	if (load || curr_jiffies == this_rq->last_bt_load_update_tick)
+		return;
+
+	pending_updates = curr_jiffies - this_rq->last_bt_load_update_tick;
+	this_rq->last_bt_load_update_tick = curr_jiffies;
+
+	__update_cpu_bt_load(this_rq, load, pending_updates);
+}
+
+/*
+ * Called from tick_nohz_idle_exit() -- try and fix up the ticks we missed.
+ */
+void update_cpu_bt_load_nohz(void)
+{
+	unsigned long curr_jiffies = ACCESS_ONCE(jiffies);
+	struct rq *this_rq = this_rq();
+	unsigned long pending_updates;
+	struct rq_flags rf;
+
+	if (curr_jiffies == this_rq->last_bt_load_update_tick)
+		return;
+
+	rq_lock(this_rq, &rf);
+	update_rq_clock(this_rq);
+	pending_updates = curr_jiffies - this_rq->last_bt_load_update_tick;
+	if (pending_updates) {
+		this_rq->last_bt_load_update_tick = curr_jiffies;
+		/*
+		 * We were idle, this means load 0, the current load might be
+		 * !0 due to remote wakeups and the sort.
+		 */
+		__update_cpu_bt_load(this_rq, 0, pending_updates);
+	}
+	rq_unlock(this_rq, &rf);
+}
+#endif
 
 static bool update_nohz_stats(struct rq *rq, bool force)
 {

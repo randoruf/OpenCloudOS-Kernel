@@ -92,6 +92,11 @@ struct io_uring_task;
 #define TASK_NEW			0x0800
 #define TASK_STATE_MAX			0x1000
 
+#ifdef CONFIG_BT_SCHED
+#define SCHED_LOAD_SHIFT	10
+#define SCHED_LOAD_SCALE	(1L << SCHED_LOAD_SHIFT)
+#endif
+
 /* Convenience macros for the sake of set_current_state: */
 #define TASK_KILLABLE			(TASK_WAKEKILL | TASK_UNINTERRUPTIBLE)
 #define TASK_STOPPED			(TASK_WAKEKILL | __TASK_STOPPED)
@@ -214,6 +219,9 @@ struct io_uring_task;
 #define TASK_COMM_LEN			16
 
 extern void scheduler_tick(void);
+#ifdef CONFIG_BT_SCHED
+extern void update_cpu_bt_load_nohz(void);
+#endif
 
 #define	MAX_SCHEDULE_TIMEOUT		LONG_MAX
 
@@ -327,6 +335,12 @@ struct sched_info {
 # define SCHED_CAPACITY_SHIFT		SCHED_FIXEDPOINT_SHIFT
 # define SCHED_CAPACITY_SCALE		(1L << SCHED_CAPACITY_SHIFT)
 
+#ifdef  CONFIG_BT_SCHED
+#define TASK_SUM_EXEC_RUNTIME(tsk)  \
+	(unsigned long long)((tsk)->se.sum_exec_runtime + (tsk)->bt.sum_exec_runtime)
+
+#endif
+
 struct load_weight {
 	unsigned long			weight;
 	u32				inv_weight;
@@ -415,6 +429,17 @@ struct sched_avg {
 	struct util_est			util_est;
 } ____cacheline_aligned;
 
+#ifdef CONFIG_BT_SCHED
+struct sched_avg_bt {
+	u64 			last_update_time;
+	u64 			load_sum;
+	u32 			util_sum;
+	u32 			period_contrib;
+	unsigned long		load_avg;
+	unsigned long		util_avg;
+};
+#endif
+
 struct sched_statistics {
 #ifdef CONFIG_SCHEDSTATS
 	u64				wait_start;
@@ -467,6 +492,9 @@ struct sched_entity {
 	u64				nr_migrations;
 
 	struct sched_statistics		statistics;
+#ifdef	CONFIG_BT_SCHED
+	struct sched_statistics		*bt_statistics;
+#endif
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	int				depth;
@@ -485,6 +513,9 @@ struct sched_entity {
 	 * collide with read-mostly values above.
 	 */
 	struct sched_avg		avg;
+#ifdef CONFIG_BT_SCHED
+	struct sched_avg_bt		bt_avg;
+#endif
 #endif
 
 	KABI_RESERVE(1);
@@ -690,6 +721,9 @@ struct task_struct {
 
 	const struct sched_class	*sched_class;
 	struct sched_entity		se;
+#ifdef CONFIG_BT_SCHED
+	struct sched_entity		bt;
+#endif
 	struct sched_rt_entity		rt;
 #ifdef CONFIG_CGROUP_SCHED
 	struct task_group		*sched_task_group;
@@ -1639,6 +1673,9 @@ static inline int task_nice(const struct task_struct *p)
 extern int can_nice(const struct task_struct *p, const int nice);
 extern int task_curr(const struct task_struct *p);
 extern int idle_cpu(int cpu);
+#ifdef CONFIG_BT_SCHED
+extern int idle_bt_cpu(int cpu);
+#endif
 extern int available_idle_cpu(int cpu);
 extern int sched_setscheduler(struct task_struct *, int, const struct sched_param *);
 extern int sched_setscheduler_nocheck(struct task_struct *, int, const struct sched_param *);
