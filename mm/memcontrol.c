@@ -2572,12 +2572,16 @@ void mem_cgroup_handle_over_high(void)
 	unsigned long pflags;
 	unsigned int nr_pages = current->memcg_nr_pages_over_high;
 	struct mem_cgroup *memcg;
+#ifdef CONFIG_CGROUP_SLI
 	u64 start;
+#endif
 
 	if (likely(!nr_pages))
 		return;
 
+#ifdef CONFIG_CGROUP_SLI
 	sli_memlat_stat_start(&start);
+#endif
 	memcg = get_mem_cgroup_from_mm(current->mm);
 	reclaim_high(memcg, nr_pages, GFP_KERNEL);
 	current->memcg_nr_pages_over_high = 0;
@@ -2607,7 +2611,9 @@ void mem_cgroup_handle_over_high(void)
 	psi_memstall_leave(&pflags);
 
 out:
+#ifdef CONFIG_CGROUP_SLI
 	sli_memlat_stat_end(MEM_LAT_MEMCG_DIRECT_RECLAIM, start);
+#endif
 	css_put(&memcg->css);
 }
 
@@ -2622,7 +2628,9 @@ static int try_charge(struct mem_cgroup *memcg, gfp_t gfp_mask,
 	bool may_swap = true;
 	bool drained = false;
 	enum oom_status oom_status;
+#ifdef CONFIG_CGROUP_SLI
 	u64 start;
+#endif
 
 	if (mem_cgroup_is_root(memcg))
 		return 0;
@@ -2682,11 +2690,15 @@ retry:
 
 	memcg_memory_event(mem_over_limit, MEMCG_MAX);
 
+#ifdef CONFIG_CGROUP_SLI
 	sli_memlat_stat_start(&start);
+#endif
 	nr_reclaimed = try_to_free_mem_cgroup_pages(mem_over_limit, nr_pages,
 						    gfp_mask, may_swap);
 
+#ifdef CONFIG_CGROUP_SLI
 	sli_memlat_stat_end(MEM_LAT_MEMCG_DIRECT_RECLAIM, start);
+#endif
 	if (mem_cgroup_margin(mem_over_limit) >= nr_pages)
 		goto retry;
 
@@ -4100,10 +4112,12 @@ static int memcg_numa_stat_show(struct seq_file *m, void *v)
 	for (stat = stats; stat < stats + ARRAY_SIZE(stats); stat++) {
 		nr = mem_cgroup_nr_lru_pages(memcg, stat->lru_mask);
 		seq_printf(m, "%s=%lu", stat->name, nr);
+		cond_resched();
 		for_each_node_state(nid, N_MEMORY) {
 			nr = mem_cgroup_node_nr_lru_pages(memcg, nid,
 							  stat->lru_mask);
 			seq_printf(m, " N%d=%lu", nid, nr);
+			cond_resched();
 		}
 		seq_putc(m, '\n');
 	}
@@ -4112,14 +4126,18 @@ static int memcg_numa_stat_show(struct seq_file *m, void *v)
 		struct mem_cgroup *iter;
 
 		nr = 0;
-		for_each_mem_cgroup_tree(iter, memcg)
+		for_each_mem_cgroup_tree(iter, memcg) {
 			nr += mem_cgroup_nr_lru_pages(iter, stat->lru_mask);
+			cond_resched();
+		}
 		seq_printf(m, "hierarchical_%s=%lu", stat->name, nr);
 		for_each_node_state(nid, N_MEMORY) {
 			nr = 0;
-			for_each_mem_cgroup_tree(iter, memcg)
+			for_each_mem_cgroup_tree(iter, memcg) {
 				nr += mem_cgroup_node_nr_lru_pages(
 					iter, nid, stat->lru_mask);
+				cond_resched();
+			}
 			seq_printf(m, " N%d=%lu", nid, nr);
 		}
 		seq_putc(m, '\n');
@@ -5464,6 +5482,7 @@ static int mem_cgroup_bind_blkio_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+#ifdef CONFIG_CGROUP_SLI
 static int mem_cgroup_sli_max_show(struct seq_file *m, void *v)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
@@ -5481,6 +5500,7 @@ static int mem_cgroup_sli_show(struct seq_file *m, void *v)
 
 	return sli_memlat_stat_show(m, cgrp);
 }
+#endif
 
 #ifdef CONFIG_CGROUPFS
 int mem_cgroupfs_vmstat_show(struct seq_file *m, void *v)
@@ -5727,6 +5747,7 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.write = mem_cgroup_reset,
 		.read_u64 = mem_cgroup_read_u64,
 	},
+#ifdef CONFIG_CGROUP_SLI
 	{
 		.name = "sli",
 		.flags = CFTYPE_NOT_ON_ROOT,
@@ -5737,6 +5758,7 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = mem_cgroup_sli_max_show,
 	},
+#endif
 	{
 		.name = "bind_blkio",
 		.flags = CFTYPE_NOT_ON_ROOT,
