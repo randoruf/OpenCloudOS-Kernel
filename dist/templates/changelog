@@ -1,3 +1,8 @@
+* Thu Sep 01 2022 Kairui Song <kasong@tencent.com> - 5.4.119-19-0010.ocrelease.7
+- Fix NULL pointer error in ip6_rcv_core
+- Dist files update
+- Misc updates for ext4, toa, sli, memcg
+
 * Fri Jul 01 2022 Kairui Song <kasong@tencent.com> - 5.4.119-19-0010.ocrelease.6
 - Enable several DRM/FB drivers
 - Rebuild base on latest OC repo
