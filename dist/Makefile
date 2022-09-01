@@ -28,8 +28,8 @@ NATIVE_ARCH := $(shell uname -m | sed -e 's/amd64/x86_64/;s/arm64/aarch64/;s/*86
 ###### Build parameters, change them with `make <PARAM>=<VALUE>` ######
 # When building binary package, which arch to build against
 ARCH := $(NATIVE_ARCH)
-# When building SRPM, which ARCH to be covered
-SPEC_ARCH := x86_64 aarch64
+# ARCH to be covered by spec file
+SPEC_ARCH := x86_64 aarch64 riscv64
 # Kernel variant, will be appended to kernel release string as suffix
 # to indicate this is a variant kernel (eg. debug; minimal;)
 VARIANT :=
@@ -88,20 +88,21 @@ RPM_SRCRPMDIR := $(RPM_TOPDIR)/SRPMS
 RPM_BUILDROOTDIR := $(RPM_TOPDIR)/BUILDROOT
 
 ### RPM build options
+# All params enabled by default (except kABI check, see below), DEFAULT_ENABLED overrides DEFAULT_DISABLE.
+DEFAULT_DISABLED=
+DEFAULT_ENABLED=
+
+## A few shortcut for commonly used params:
 # Disable KABI check by default
 KABI=0
 ifeq ($(KABI), 0)
-override RPMFLAGS := --without kabichk $(RPMFLAGS)
-else
-override RPMFLAGS := --with kabichk $(RPMFLAGS)
+override DEFAULT_DISABLED := kabichk $(DEFAULT_DISABLED)
 endif
 
 # Enabled module sign by default
 MODSIGN=1
 ifeq ($(MODSIGN), 0)
-override RPMFLAGS := --without modsign $(RPMFLAGS)
-else
-override RPMFLAGS := --with modsign $(RPMFLAGS)
+override DEFAULT_DISABLED := modsign $(DEFAULT_DISABLED)
 endif
 
 # Allow to skip RPM dependency check
@@ -115,6 +116,13 @@ ifneq ($(BUILD_ARCH),$(NATIVE_ARCH))
 RPMCROSSFLAGS = --with crossbuild --target $(BUILD_ARCH) --define "_cross_compile $(BUILD_ARCH)-linux-gnu-"
 else
 RPMCROSSFLAGS = --without crossbuild
+endif
+
+# For re-distribute to another distro
+ifneq ($(DISTRO),)
+override RPMFLAGS := --define "dist .$(DISTRO)" $(RPMFLAGS)
+$(info "NOTE: DISTRO is set, building for another distro $(DISTRO)")
+$(info "      You shoudn't do this unless you know what you are doing.")
 endif
 
 # Always make sure workdir exists
@@ -154,7 +162,10 @@ $(SPECFILE): always-rebuild
 		--build-arch "$(SRPM_ARCH)" \
 		--kernel-config "$(CONFIG)" \
 		--kernel-variant "$(VARIANT)" \
+		--set-default-disabled "$(DEFAULT_DISABLED)" \
+		--set-default-enabled "$(DEFAULT_ENABLED)" \
 		> $(SPECFILE)
+	@grep -A2 "# == Package options ==" $(SPECFILE) | cut -c3-
 
 dist-specfile: $(SPECFILE) $(TOPDIR)/.config
 	@echo "$(SPECFILE)"

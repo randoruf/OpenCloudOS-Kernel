@@ -25,35 +25,26 @@
 # upstream
 %global _lto_cflags %{nil}
 
-###### Kernel packaging params #################################################
+###### Kernel packaging options #################################################
 # Since we need to generate kernel, kernel-subpackages, perf, bpftools, from
 # this one single code tree, following build switches are very helpful.
 #
-# The following build options are enabled by default, but may become disabled
-# by later checks. These can also be disabled by using
-# --without <opt> in the rpmbuild command, or by forcing these values to 0.
+# The following build options can be enabled or disabled with --with/--without
+# in the rpmbuild command. But may by disabled by later checks#
 #
-# kernel-core
-%define with_core	%{?_without_up: 0}		%{?!_without_up: 1}
-# kernel-doc
-%define with_doc	%{?_without_doc: 0}		%{?!_without_doc: 1}
-# kernel-headers
-%define with_headers	%{?_without_headers: 0}		%{?!_without_headers: 1}
-# perf
-%define with_perf	%{?_without_perf: 0}		%{?!_without_perf: 1}
-# tools
-%define with_tools	%{?_without_tools: 0}		%{?!_without_tools: 1}
-# bpf tool
-%define with_bpftool	%{?_without_bpftool: 0}		%{?!_without_bpftool: 1}
-# kernel-debuginfo
-%define with_debuginfo	%{?_without_debuginfo: 0}	%{?!_without_debuginfo: 1}
-# internal samples and selftests
-%define with_selftests	%{?_without_selftests: 0}	%{?!_without_selftests: 1}
-# Control whether we perform a compat. check against published ABI.
-%define with_modsign	%{?_without_modsign: 0}		%{?!_without_modsign: 1}
-# Control whether we perform a compat. check against published ABI.
-%define with_kabichk	%{?_with_kabichk: 1}		%{?!_with_kabichk: 0}
-# Cross compile requested?
+# This section defines following options:
+# with_core: kernel core pkg
+# with_doc: kernel doc pkg
+# with_headers: kernel headers pkg
+# with_perf: perf tools pkg
+# with_tools: kernel tools pkg
+# with_bpftool: bpftool pkg
+# with_debuginfo: debuginfo for all packages
+# with_modsign: if mod should be signed
+# with_kabichk: if kabi check is needed at the end of build
+{{PKGPARAMSPEC}}
+
+# Only use with cross build, don't touch it unless you know what you are doing
 %define with_crossbuild	%{?_with_crossbuild: 1}		%{?!_with_crossbuild: 0}
 
 ###### Kernel signing params #################################################
@@ -123,9 +114,6 @@
 %global debuginfo_dir /usr/lib/debug
 
 ###### Build time config #######################################################
-# Currently only x86_64 and aarch64 are supported
-ExclusiveArch: x86_64 aarch64
-
 # Disable kernel building for non-supported arch, allow building userspace package
 %ifarch %nobuildarches noarch
 %global with_core 0
@@ -189,20 +177,17 @@ Source0: %{kernel_tarname}.tar
 ### Build time scripts
 # Script used to assist kernel building
 Source10: filter-modules.sh
-Source12: filter-aarch64.sh
-Source11: filter-x86_64.sh
 
 Source20: module-signer.sh
 Source21: module-keygen.sh
 
 Source30: check-kabi
 
-### Kernel configs and kABI
-# Start from Source1000 to Source1499, for kernel config
-{{CONFSOURCESPEC}}
-
-# Start from Source1500 to Source1999, for kabi
-{{KABISOURCESPEC}}
+### Arch speficied kernel configs and kABI
+# Start from Source1000 to Source1199, for kernel config
+# Start from Source1200 to Source1399, for kabi
+# Start from Source1400 to Source1599, for filter-<arch>.sh
+{{ARCHSOURCESPEC}}
 
 ### Userspace tools
 # Start from Source2000 to Source2999, for userspace tools
@@ -582,7 +567,8 @@ BuildConfig() {
 	sed -i -e "s/^CONFIG_SECURITY_LOCKDOWN_LSM=.*/# CONFIG_SECURITY_LOCKDOWN_LSM is not set/" .config
 	sed -i -e "s/^CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=.*/# CONFIG_SECURITY_LOCKDOWN_LSM_EARLY is not set/" .config
 	%endif
-
+	# Don't use kernel's builtin module compression, imcompatible with debuginfo packaging and signing
+	sed -i -e "s/^\(CONFIG_DECOMPRESS_.*\)=y/# \1 is not set/" .config
 	popd
 }
 
@@ -738,13 +724,19 @@ InstKernelBasic() {
 	# NOTE: If we need to sign the vmlinuz, this is the place to do it.
 	%ifarch aarch64
 	install -m 644 $_KernBuild/arch/arm64/boot/Image vmlinuz
-	install -m 644 $_KernBuild/arch/arm64/boot/Image %{buildroot}/boot/vmlinuz-$KernUnameR
+	%endif
+
+	%ifarch riscv64
+	mkdir dtb
+	cp $_KernBuild/arch/riscv/boot/dts/*/*.dtb dtb/
+	install -m 644 $_KernBuild/arch/riscv/boot/Image vmlinuz
 	%endif
 
 	%ifarch x86_64
 	install -m 644 $_KernBuild/arch/x86/boot/bzImage vmlinuz
-	install -m 644 $_KernBuild/arch/x86/boot/bzImage %{buildroot}/boot/vmlinuz-$KernUnameR
 	%endif
+
+	install -m 644 vmlinuz %{buildroot}/boot/vmlinuz-$KernUnameR
 
 	sha512hmac %{buildroot}/boot/vmlinuz-$KernUnameR | sed -e "s,%{buildroot},," > .vmlinuz.hmac
 	cp .vmlinuz.hmac %{buildroot}/boot/.vmlinuz-$KernUnameR.hmac
@@ -1017,6 +1009,7 @@ done
 ###### RPM scriptslets #########################################################
 ### Core package
 # Pre
+%if %{with_core}
 %pre core
 system_arch=$(uname -m)
 if [ %{_target_cpu} != $system_arch ]; then
@@ -1073,6 +1066,7 @@ if [ "$HARDLINK" != "no" -a -x /usr/bin/hardlink -a ! -e /run/ostree-booted ]; t
 		hardlink /usr/src/kernels/*/$f $f > /dev/null
 	done)
 fi
+%endif
 
 ### kernel-tools package
 %if %{with_tools}
@@ -1098,7 +1092,7 @@ fi
 /boot/config-%{kernel_unamer}
 /boot/symvers-%{kernel_unamer}.gz
 # Initramfs will be generated after install
-%ghost /boot/initramfs-%{kernel_unamer}%{?dist}
+%ghost /boot/initramfs-%{kernel_unamer}%{?dist}.img
 # Make depmod files ghost files of the core package
 %ghost /lib/modules/%{kernel_unamer}/modules.alias
 %ghost /lib/modules/%{kernel_unamer}/modules.alias.bin
