@@ -15,12 +15,12 @@ $(error Can't detect Makefile, aborting)
 endif
 
 ### Downstream marker, update this when forking to another downstream
-KDIST =
+KDIST = stable
 
 ### Vendor mark
-VENDOR = tencent
-VENDOR_CAPITALIZED = Tencent
-URL = https://github.com/Tencent/TencentOS-kernel
+VENDOR = opencloudos
+VENDOR_CAPITALIZED = OpenCloudOS
+URL = https://gitee.com/OpenCloudOS/OpenCloudOS-Kernel
 
 ### Get native arch for binary build by default
 NATIVE_ARCH := $(shell uname -m | sed -e 's/amd64/x86_64/;s/arm64/aarch64/;s/*86$$/x86/')
